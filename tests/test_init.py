@@ -15,7 +15,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 
 from custom_components.gleanvolt.const import DOMAIN
 
-from .conftest import BASE, HEALTH, SYSTEM_ID, mock_api
+from .conftest import BASE, HEALTH, STATUS, SYSTEM_ID, mock_api
 
 
 async def test_setup_and_device(hass: HomeAssistant, loaded_entry: MockConfigEntry) -> None:
@@ -113,3 +113,25 @@ async def test_401_at_runtime_starts_reauth(
 async def test_unload(hass: HomeAssistant, loaded_entry: MockConfigEntry) -> None:
     assert await hass.config_entries.async_unload(loaded_entry.entry_id)
     assert loaded_entry.state is ConfigEntryState.NOT_LOADED
+
+
+async def test_plan_figures_only_while_their_mode_drives(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry
+) -> None:
+    """/status carries the day plan in every mode; the sensors show it only in Forecasted."""
+    plan = {"reason": "No chargeable window today", "evBudgetWh": 4200.0}
+    coordinator = loaded_entry.runtime_data.status
+    coordinator.async_set_updated_data({**STATUS, "mode": "off", "dayPlan": plan})
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.home_roof_plan_state").state == "unknown"
+    assert hass.states.get("sensor.home_roof_ev_energy_budget").state == "unknown"
+
+    coordinator.async_set_updated_data({**STATUS, "mode": "forecasted", "dayPlan": plan})
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.home_roof_plan_state").state == "No chargeable window today"
+    assert hass.states.get("sensor.home_roof_ev_energy_budget").state == "4.2"
+
+    fast = {"deliveredEnergyWh": 1500.0, "requiredEnergyWh": 20000.0}
+    coordinator.async_set_updated_data({**STATUS, "mode": "solar", "fastCharge": fast})
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.home_roof_fast_delivered").state == "unknown"

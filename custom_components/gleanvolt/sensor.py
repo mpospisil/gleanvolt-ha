@@ -132,6 +132,13 @@ def _reason(key: str, path: str) -> GleanvoltSensorDescription:
     return GleanvoltSensorDescription(key=key, path=path, convert=_text)
 
 
+# The /status objects whose figures belong to one mode, and that mode.
+MODE_GATED = {
+    "dayPlan": "forecasted",
+    "targetedPlan": "targeted",
+    "fastCharge": "fastNoBattery",
+}
+
 CHARGER_STATUSES = [
     "available",
     "preparing",
@@ -309,7 +316,14 @@ class GleanvoltSensor(GleanvoltCoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         description = self.entity_description
-        return description.convert(resolve(self._source(), description.path))
+        source = self._source()
+        # The controller builds every plan in every mode, so its meters survive a mode switch, and
+        # /status carries them all. Shown only while their mode drives, as over MQTT: a plan nobody
+        # is acting on is not what the charger is doing.
+        gate = MODE_GATED.get(description.path.split(".", 1)[0])
+        if gate is not None and resolve(source, "mode") != gate:
+            return None
+        return description.convert(resolve(source, description.path))
 
 
 class GleanvoltGridPrice(GleanvoltSensor):
