@@ -12,6 +12,8 @@
       "battery_loan_power": { "default": "mdi:battery-arrow-down-outline" },
       "battery_loaned_today": { "default": "mdi:battery-arrow-down-outline" },
       "tomorrow_forecast": { "default": "mdi:weather-sunny" },
+      "forecast_today": { "default": "mdi:weather-sunny" },
+      "forecast_still_to_come": { "default": "mdi:weather-sunset-down" },
       "plan_state": { "default": "mdi:text-box-outline" },
       "target_plan_state": { "default": "mdi:text-box-outline" },
       "forecast_accuracy": { "default": "mdi:bullseye-arrow" },

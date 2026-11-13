@@ -159,6 +159,12 @@
       "tomorrow_forecast": {
         "name": "Předpověď na zítra"
       },
+      "forecast_today": {
+        "name": "Předpověď na dnes"
+      },
+      "forecast_still_to_come": {
+        "name": "Předpověď do konce dne"
+      },
       "plan_state": {
         "name": "Stav plánu"
       },

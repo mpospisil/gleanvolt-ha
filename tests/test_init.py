@@ -37,6 +37,8 @@ async def test_sensors(hass: HomeAssistant, loaded_entry: MockConfigEntry) -> No
     assert hass.states.get("sensor.home_roof_ev_energy_budget").state == "unknown"
     assert hass.states.get("sensor.home_roof_target_grid_energy").state == "unknown"
     assert hass.states.get("sensor.home_roof_car_range").state == "152.0"
+    assert hass.states.get("sensor.home_roof_forecast_today").state == "12.4"
+    assert hass.states.get("sensor.home_roof_forecast_still_to_come").state == "5.1"
     price = hass.states.get("sensor.home_roof_grid_price")
     assert price.state == "2.5"
     assert price.attributes["unit_of_measurement"] == "CZK/kWh"

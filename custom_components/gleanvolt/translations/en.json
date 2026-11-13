@@ -159,6 +159,12 @@
       "tomorrow_forecast": {
         "name": "Tomorrow forecast"
       },
+      "forecast_today": {
+        "name": "Forecast today"
+      },
+      "forecast_still_to_come": {
+        "name": "Forecast still to come"
+      },
       "plan_state": {
         "name": "Plan state"
       },

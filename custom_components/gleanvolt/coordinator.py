@@ -70,12 +70,13 @@ class GleanvoltStatusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
 @dataclass
 class SlowData:
-    """What changes slowly: the car's reading, the tariff, the two option flags and health."""
+    """What changes slowly: the car's reading, the tariff, the option flags, the forecast, health."""
 
     vehicle: dict[str, Any] = field(default_factory=dict)
     tariff: dict[str, Any] = field(default_factory=dict)
     low_tariff_only: dict[str, Any] = field(default_factory=dict)
     until_full: dict[str, Any] = field(default_factory=dict)
+    forecast: dict[str, Any] = field(default_factory=dict)
     health: dict[str, Any] = field(default_factory=dict)
 
     def source(self, name: str) -> dict[str, Any]:
@@ -116,6 +117,7 @@ class GleanvoltSlowCoordinator(DataUpdateCoordinator[SlowData]):
                 tariff=await self.client.tariff(),
                 low_tariff_only=await self.client.low_tariff_only(),
                 until_full=await self.client.until_full(),
+                forecast=await self.client.forecast(),
                 health=self._health,
             )
         except GleanvoltError as err:

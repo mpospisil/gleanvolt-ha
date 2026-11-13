@@ -24,6 +24,7 @@ SOURCE_SCHEMAS = {
     "tariff": "TariffResponse",
     "low_tariff_only": "LowTariffOnlyResponse",
     "until_full": "UntilFullResponse",
+    "forecast": "ForecastResponse",
 }
 
 # Read by entities that are not descriptions.

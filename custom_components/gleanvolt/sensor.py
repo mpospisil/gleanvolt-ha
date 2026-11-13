@@ -259,6 +259,9 @@ SENSORS: tuple[GleanvoltSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfLength.KILOMETERS,
     ),
     _time("car_reading_age", "capturedAt", source="vehicle"),
+    # Today's solar forecast, from /forecast (the cached one: no weather fetch).
+    _energy("forecast_today", "todayExpectedWh", source="forecast"),
+    _energy("forecast_still_to_come", "todayRemainingWh", source="forecast"),
     # The tariff, from /tariff.
     _time("tariff_change", "now.until", source="tariff"),
     # Health, from /health.

@@ -24,6 +24,8 @@ ROUTES: dict[str, tuple[str, str, str | None]] = {
     "low_tariff_only": ("GET", "/charging/low-tariff-only", "LowTariffOnlyResponse"),
     "set_low_tariff_only": ("PUT", "/charging/low-tariff-only", "LowTariffOnlyResponse"),
     "until_full": ("GET", "/charging/until-full", "UntilFullResponse"),
+    # Without ?weather=true: the cached forecast, no call to a weather provider.
+    "forecast": ("GET", "/forecast", "ForecastResponse"),
     "set_until_full": ("PUT", "/charging/until-full", "UntilFullResponse"),
     "start": ("POST", "/charging/start", "ControlActionResponse"),
     "stop": ("POST", "/charging/stop", "ControlActionResponse"),
@@ -184,6 +186,9 @@ class GleanvoltClient:
 
     async def until_full(self) -> dict[str, Any]:
         return await self._request("until_full")
+
+    async def forecast(self) -> dict[str, Any]:
+        return await self._request("forecast")
 
     async def set_until_full(self, until_full: bool) -> dict[str, Any]:
         return await self._request("set_until_full", {"untilFull": until_full})

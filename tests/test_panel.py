@@ -23,14 +23,20 @@ def _layout() -> dict:
     return json.loads(block[block.index("{") : block.rindex("}") + 1])
 
 
+def _items(layout: dict) -> list:
+    items = [*layout["pv"], *layout["charging"]]
+    for parts in layout["modes"].values():
+        items += parts["setup"] + parts["running"]
+    return items
+
+
 def _keys(layout: dict) -> set[str]:
-    keys = {*layout["top"], layout["picker"], layout["start"]}
-    for items in layout["modes"].values():
-        for item in items:
-            if isinstance(item, str):
-                keys.add(item)
-            elif "entity" in item:
-                keys.update((item["entity"], item["when"][0]))
+    keys = {layout["mode"], layout["picker"], layout["start"], layout["stop"]}
+    for item in _items(layout):
+        if isinstance(item, str):
+            keys.add(item)
+        else:
+            keys.update((item["entity"], item["when"][0]))
     return keys
 
 
@@ -44,9 +50,12 @@ async def test_layout_names_only_real_entities(
     }
     layout = _layout()
     assert sorted(_keys(layout) - made) == []
-    # A tab per mode Charge mode can start, and the picker offers exactly those.
+    # A tab per mode that can be started, and the picker offers exactly those.
     picker = hass.states.get("select.home_roof_mode_to_start")
     assert list(layout["modes"]) == picker.attributes["options"]
+    # The running and off sections key on the Charge mode sensor's own states.
+    mode = hass.states.get("sensor.home_roof_charge_mode")
+    assert {*layout["modes"], "off"} == set(mode.attributes["options"])
 
 
 async def test_conditions_use_real_states(
@@ -57,11 +66,10 @@ async def test_conditions_use_real_states(
         f"{entry.domain}.{entry.translation_key}": entry.entity_id
         for entry in er.async_entries_for_config_entry(er.async_get(hass), loaded_entry.entry_id)
     }
-    for items in _layout()["modes"].values():
-        for item in items:
-            if isinstance(item, dict) and "when" in item:
-                key, state = item["when"]
-                assert state in hass.states.get(ids[key]).attributes["options"]
+    for item in _items(_layout()):
+        if isinstance(item, dict):
+            key, state = item["when"]
+            assert state in hass.states.get(ids[key]).attributes["options"]
 
 
 def test_mode_names_cover_every_tab() -> None:

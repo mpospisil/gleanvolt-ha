@@ -99,6 +99,16 @@ TARIFF: dict[str, Any] = {
 
 LOW_TARIFF_ONLY = {"fastNoBattery": False, "solarGrid": True, "tariffKnown": True}
 UNTIL_FULL = {"untilFull": False, "session": None}
+FORECAST: dict[str, Any] = {
+    "retrievedAt": "2026-11-13T06:00:00+01:00",
+    "days": [],
+    "todayExpectedWh": 12400.0,
+    "todayRemainingWh": 5100.0,
+    "tomorrowExpectedWh": 18400.0,
+    "peakPowerWatts": 3900.0,
+    "periods": [],
+    "weather": None,
+}
 
 
 def action(succeeded: bool = True, message: str | None = None, status: dict | None = None) -> dict:
@@ -134,6 +144,7 @@ def mock_api(
     aioclient_mock.get(f"{BASE}/tariff", json=TARIFF)
     aioclient_mock.get(f"{BASE}/charging/low-tariff-only", json=LOW_TARIFF_ONLY)
     aioclient_mock.get(f"{BASE}/charging/until-full", json=UNTIL_FULL)
+    aioclient_mock.get(f"{BASE}/forecast", json=FORECAST)
 
 
 @pytest.fixture

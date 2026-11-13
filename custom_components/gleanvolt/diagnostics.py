@@ -30,4 +30,7 @@ async def async_get_config_entry_diagnostics(
         "tariff": slow.tariff if slow else None,
         "low_tariff_only": slow.low_tariff_only if slow else None,
         "until_full": slow.until_full if slow else None,
+        "forecast": {
+            key: value for key, value in (slow.forecast if slow else {}).items() if key != "periods"
+        },
     }
