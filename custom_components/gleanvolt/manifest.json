@@ -1,0 +1,13 @@
+{
+  "domain": "gleanvolt",
+  "name": "Gleanvolt",
+  "codeowners": ["@mpospisil"],
+  "config_flow": true,
+  "documentation": "https://github.com/mpospisil/gleanvolt-ha",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/mpospisil/gleanvolt-ha/issues",
+  "requirements": [],
+  "version": "0.1.0",
+  "zeroconf": ["_gleanvolt._tcp.local."]
+}

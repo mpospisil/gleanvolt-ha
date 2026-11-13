@@ -1,0 +1,505 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Connect to Gleanvolt",
+        "description": "Gleanvolt {minimum} or later, with its HTTP API switched on (Settings → Installation → API access). Create a key named `home-assistant` there, so the log and the sessions name Home Assistant as the source of what it starts.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "api_key": "API key"
+        },
+        "data_description": {
+          "host": "The machine Gleanvolt runs on, for example gleanvolt.local or 192.168.1.20.",
+          "port": "The web UI's port, 8090 unless you changed it.",
+          "api_key": "The key's secret, from Settings → Installation → API access."
+        }
+      },
+      "zeroconf_confirm": {
+        "title": "Gleanvolt discovered",
+        "description": "{name} was found at {host}:{port}. Enter an API key from its Settings → Installation → API access (Gleanvolt {minimum} or later).",
+        "data": {
+          "api_key": "API key"
+        },
+        "data_description": {
+          "api_key": "The key's secret, from Settings → Installation → API access."
+        }
+      },
+      "reauth_confirm": {
+        "title": "New API key",
+        "description": "{name} refused the API key. Enter a valid one from Settings → Installation → API access.",
+        "data": {
+          "api_key": "API key"
+        },
+        "data_description": {
+          "api_key": "The key's secret, from Settings → Installation → API access."
+        }
+      },
+      "reconfigure": {
+        "title": "Change the address",
+        "description": "Where {name} is reached now. The API key stays as it is.",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        },
+        "data_description": {
+          "host": "The machine Gleanvolt runs on, for example gleanvolt.local or 192.168.1.20.",
+          "port": "The web UI's port, 8090 unless you changed it."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No answer from that address. Check the host and port, and that Gleanvolt is running.",
+      "invalid_auth": "The API key was refused.",
+      "api_disabled": "The HTTP API is switched off. Switch it on in Settings → Installation → API access, then Restart on Settings → Health.",
+      "unsupported_version": "This is Gleanvolt {version}; the integration needs {minimum} or later. Update Gleanvolt first.",
+      "unknown": "Unexpected error. The Home Assistant log has the details."
+    },
+    "abort": {
+      "already_configured": "This Gleanvolt installation is already set up.",
+      "already_in_progress": "This Gleanvolt installation is already set up.",
+      "reauth_successful": "The new key works.",
+      "reconfigure_successful": "The address is updated.",
+      "wrong_device": "That address answers as a different Gleanvolt installation."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling",
+        "description": "How often the live status is read. Car, tariff and option flags are read every minute regardless.",
+        "data": {
+          "scan_interval": "Status interval"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "charge_mode": {
+        "name": "Charge mode",
+        "state": {
+          "off": "Off",
+          "solar": "Solar",
+          "forecasted": "Forecasted",
+          "solar_grid": "SolarGrid",
+          "fast_no_battery": "FastNoBattery",
+          "targeted": "Targeted"
+        }
+      },
+      "control_state": {
+        "name": "Control state",
+        "state": {
+          "disabled": "Disabled",
+          "idle": "Idle",
+          "charging": "Charging",
+          "paused": "Paused"
+        }
+      },
+      "charger_status": {
+        "name": "Charger status",
+        "state": {
+          "available": "Available",
+          "preparing": "Preparing",
+          "charging": "Charging",
+          "finishing": "Finishing",
+          "faulted": "Faulted",
+          "unavailable": "Unavailable",
+          "reserved": "Reserved",
+          "suspended_ev": "SuspendedEv",
+          "suspended_evse": "SuspendedEvse",
+          "update": "Update",
+          "card_activation": "CardActivation",
+          "start_delay": "StartDelay",
+          "charge_paused": "ChargePaused",
+          "stopping": "Stopping",
+          "unknown": "Unknown"
+        }
+      },
+      "solar_power": {
+        "name": "Solar power"
+      },
+      "forecast_solar_power": {
+        "name": "Forecast solar power"
+      },
+      "solar_surplus": {
+        "name": "Solar surplus"
+      },
+      "grid_power": {
+        "name": "Grid power"
+      },
+      "battery_power": {
+        "name": "Battery power"
+      },
+      "battery_soc": {
+        "name": "Battery SOC"
+      },
+      "ev_charging_power": {
+        "name": "EV charging power"
+      },
+      "ev_charging_current": {
+        "name": "EV charging current"
+      },
+      "target_charging_current": {
+        "name": "Target charging current"
+      },
+      "active_charging_current": {
+        "name": "Active charging current"
+      },
+      "session_energy": {
+        "name": "Session energy"
+      },
+      "battery_loan_power": {
+        "name": "Battery loan power"
+      },
+      "battery_loaned_today": {
+        "name": "Battery loaned today"
+      },
+      "tomorrow_forecast": {
+        "name": "Tomorrow forecast"
+      },
+      "plan_state": {
+        "name": "Plan state"
+      },
+      "ev_energy_budget": {
+        "name": "EV energy budget"
+      },
+      "projected_shortfall": {
+        "name": "Projected shortfall"
+      },
+      "surplus_spill": {
+        "name": "Surplus spill"
+      },
+      "loan_headroom": {
+        "name": "Loan headroom"
+      },
+      "required_soc_floor": {
+        "name": "Required SOC floor"
+      },
+      "trajectory_soc_floor": {
+        "name": "Trajectory SOC floor"
+      },
+      "forecast_remaining_today": {
+        "name": "Forecast remaining today"
+      },
+      "forecast_accuracy": {
+        "name": "Forecast accuracy"
+      },
+      "target_plan_state": {
+        "name": "Target plan state"
+      },
+      "target_forecast_surplus": {
+        "name": "Target forecast surplus"
+      },
+      "target_solar_energy": {
+        "name": "Target solar energy"
+      },
+      "target_grid_energy": {
+        "name": "Target grid energy"
+      },
+      "target_expected": {
+        "name": "Target expected"
+      },
+      "target_shortfall": {
+        "name": "Target shortfall"
+      },
+      "target_charge_pace": {
+        "name": "Target charge pace"
+      },
+      "charging_from": {
+        "name": "Charging from"
+      },
+      "target_hold_until": {
+        "name": "Target hold until"
+      },
+      "fast_delivered": {
+        "name": "Fast delivered"
+      },
+      "fast_target": {
+        "name": "Fast target"
+      },
+      "fast_start": {
+        "name": "Fast start"
+      },
+      "car_soc": {
+        "name": "Car SOC"
+      },
+      "car_range": {
+        "name": "Car range"
+      },
+      "car_reading_age": {
+        "name": "Car reading age"
+      },
+      "tariff_change": {
+        "name": "Tariff change"
+      },
+      "grid_price": {
+        "name": "Grid price"
+      },
+      "last_poll_age": {
+        "name": "Last poll age"
+      },
+      "version": {
+        "name": "Version"
+      }
+    },
+    "binary_sensor": {
+      "car_connected": {
+        "name": "Car connected"
+      },
+      "charging_now": {
+        "name": "Charging now"
+      },
+      "battery_hold_active": {
+        "name": "Battery hold active"
+      },
+      "dry_run": {
+        "name": "Dry run"
+      },
+      "car_reading_stale": {
+        "name": "Car reading stale"
+      },
+      "low_tariff": {
+        "name": "Low tariff"
+      },
+      "forecast_available": {
+        "name": "Forecast available"
+      }
+    },
+    "select": {
+      "charge_mode": {
+        "name": "Charge mode",
+        "state": {
+          "off": "Off",
+          "solar": "Solar",
+          "forecasted": "Forecasted",
+          "solar_grid": "SolarGrid",
+          "fast_no_battery": "FastNoBattery",
+          "targeted": "Targeted"
+        }
+      },
+      "fast_basis": {
+        "name": "Fast basis",
+        "state": {
+          "full": "Full",
+          "energy": "Energy",
+          "soc": "Soc"
+        }
+      },
+      "target_basis": {
+        "name": "Target basis",
+        "state": {
+          "energy": "Energy",
+          "soc": "Soc"
+        }
+      },
+      "charge_priority": {
+        "name": "Charge priority",
+        "state": {
+          "cheapest": "Cheapest",
+          "just_in_time": "JustInTime"
+        }
+      }
+    },
+    "number": {
+      "fast_energy": {
+        "name": "Fast energy"
+      },
+      "fast_target_soc": {
+        "name": "Fast target SOC"
+      },
+      "target_energy": {
+        "name": "Target energy"
+      },
+      "target_soc": {
+        "name": "Target SOC"
+      },
+      "target_rest_soc": {
+        "name": "Target rest SOC"
+      }
+    },
+    "datetime": {
+      "fast_departure": {
+        "name": "Fast departure"
+      },
+      "departure": {
+        "name": "Departure"
+      }
+    },
+    "switch": {
+      "battery_discharge_hold": {
+        "name": "Battery discharge hold"
+      },
+      "fast_low_tariff_only": {
+        "name": "Fast low tariff only"
+      },
+      "solar_grid_low_tariff_only": {
+        "name": "SolarGrid low tariff only"
+      },
+      "forecasted_until_full": {
+        "name": "Forecasted until full"
+      },
+      "target_sun_only": {
+        "name": "Target sun only"
+      },
+      "target_low_tariff_only": {
+        "name": "Target low tariff only"
+      }
+    },
+    "button": {
+      "stop_charging": {
+        "name": "Stop charging"
+      }
+    }
+  },
+  "exceptions": {
+    "refused": {
+      "message": "Gleanvolt refused: {message}"
+    },
+    "cannot_connect": {
+      "message": "Could not reach Gleanvolt: {error}"
+    },
+    "invalid_auth": {
+      "message": "The API key was refused."
+    },
+    "api_disabled": {
+      "message": "The HTTP API is switched off on this Gleanvolt."
+    },
+    "not_ready": {
+      "message": "Gleanvolt is running but has not completed a poll yet."
+    },
+    "unsupported_version": {
+      "message": "This is Gleanvolt {version}; the integration needs {minimum} or later."
+    },
+    "no_entry": {
+      "message": "No Gleanvolt installation is loaded."
+    },
+    "no_single_entry": {
+      "message": "More than one Gleanvolt installation is loaded: name one with config_entry_id."
+    },
+    "entry_not_loaded": {
+      "message": "No loaded Gleanvolt installation has the config entry {entry}."
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "solar": "Solar",
+        "forecasted": "Forecasted",
+        "solar_grid": "SolarGrid",
+        "fast_no_battery": "FastNoBattery",
+        "targeted": "Targeted"
+      }
+    },
+    "fast_basis": {
+      "options": {
+        "full": "Full",
+        "energy": "Energy",
+        "soc": "Soc"
+      }
+    },
+    "priority": {
+      "options": {
+        "cheapest": "Cheapest",
+        "just_in_time": "JustInTime"
+      }
+    }
+  },
+  "services": {
+    "start_charging": {
+      "name": "Start charging",
+      "description": "Starts a mode with the fields given here, not the held parameter entities. Fails with the controller's reason when it refuses.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Installation",
+          "description": "Which Gleanvolt. Needed only with more than one."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "The mode to start."
+        },
+        "basis": {
+          "name": "Fast basis",
+          "description": "FastNoBattery: Full (until the car stops), Energy (reads energy) or Soc (reads target SOC)."
+        },
+        "energy_kwh": {
+          "name": "Energy",
+          "description": "Energy to deliver, measured at the charger."
+        },
+        "target_soc": {
+          "name": "Target SOC",
+          "description": "The car's state of charge to reach."
+        },
+        "depart_by": {
+          "name": "Departure",
+          "description": "When the car has to be ready. FastNoBattery: leave out to charge now."
+        },
+        "priority": {
+          "name": "Charge priority",
+          "description": "Targeted: Cheapest, or JustInTime to hold the last stretch back."
+        },
+        "rest_soc": {
+          "name": "Rest SOC",
+          "description": "Targeted, JustInTime: where the car waits before the last stretch."
+        },
+        "sun_only": {
+          "name": "Sun only",
+          "description": "Targeted: buy nothing from the grid."
+        },
+        "low_tariff_only": {
+          "name": "Low tariff only",
+          "description": "Targeted: charge only in low tariff."
+        }
+      }
+    },
+    "stop_charging": {
+      "name": "Stop charging",
+      "description": "Writes Stop to the charger and returns the mode to Off, clearing any standing target.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Installation",
+          "description": "Which Gleanvolt. Needed only with more than one."
+        }
+      }
+    },
+    "preview_targeted": {
+      "name": "Preview targeted charge",
+      "description": "Quotes a targeted charge and returns the plan, without starting anything or touching the charger.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Installation",
+          "description": "Which Gleanvolt. Needed only with more than one."
+        },
+        "energy_kwh": {
+          "name": "Energy",
+          "description": "Energy to deliver, measured at the charger."
+        },
+        "target_soc": {
+          "name": "Target SOC",
+          "description": "The car's state of charge to reach."
+        },
+        "depart_by": {
+          "name": "Departure",
+          "description": "When the car has to be ready. FastNoBattery: leave out to charge now."
+        },
+        "priority": {
+          "name": "Charge priority",
+          "description": "Targeted: Cheapest, or JustInTime to hold the last stretch back."
+        },
+        "rest_soc": {
+          "name": "Rest SOC",
+          "description": "Targeted, JustInTime: where the car waits before the last stretch."
+        },
+        "sun_only": {
+          "name": "Sun only",
+          "description": "Targeted: buy nothing from the grid."
+        },
+        "low_tariff_only": {
+          "name": "Low tariff only",
+          "description": "Targeted: charge only in low tariff."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,4563 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Gleanvolt",
+    "description": "The local control API of a Gleanvolt installation: a SolaX hybrid inverter, a home battery, an EV charger and the roof above them.\n\nEverything is read from one poll loop on the local network — no cloud is involved and nothing here leaves the LAN. Powers are instantaneous watts signed as the hardware reports them (grid positive is import, battery positive is charging); energies are watt-hours at the charger or the meter, except in the energy-history endpoints, which are stated in kilowatt-hours per window. Every timestamp is ISO-8601 with an offset, because a departure time here is a local-time promise.\n\nTwo of these endpoints write to hardware. Everything else observes.",
+    "version": "v1"
+  },
+  "servers": [
+    {
+      "url": "http://localhost/"
+    }
+  ],
+  "paths": {
+    "/api/v1": {
+      "get": {
+        "tags": [
+          "testhost"
+        ],
+        "summary": "What this API is and how to authenticate",
+        "description": "The entry point, and the only endpoint that needs no key. It lists the operations this build serves and points at the OpenAPI document, so a base URL opened in a browser says what it is instead of answering with an empty 404. It carries nothing an unauthenticated caller could act on.",
+        "operationId": "getIndex",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiIndexResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "The installation this controller speaks for",
+        "description": "Which system, where it is, what the array does, and which devices it is made of. Ask this first: every other endpoint reports what the controller is doing, and two installations answer those identically. Values are null when unset rather than zero — an unconfigured coordinate is not 0,0, which is a real place in the Atlantic.",
+        "operationId": "getSite",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "The live state of the site",
+        "description": "Every figure the control loop last read: what the roof is making, which way the meter is running, where the home battery sits, what the car is drawing, and which mode is driving the charger. Published once per poll (five seconds by default), so polling this faster than that returns the same snapshot.",
+        "operationId": "getStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Whether the controller is alive and what it can see",
+        "description": "Poll this to answer 'is it working?'. It reports which installation is answering, the running build, how long ago the last poll completed, whether a forecast and a vehicle reading are in hand, whether the two history databases can be read, and what protects the secrets in the data directory. It never fails for a component being down -- that is what it is reporting.",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/energy/intervals": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "The energy series at recording resolution",
+        "description": "Every recorded window that starts inside [from, to), oldest first — a quarter hour each by default. Defaults to the last 24 hours. Read each row's 'coverage' before trusting it: a window the service was not running for all of is short by the same fraction, and a restart is not the sun going out. The range is bounded; ask for a long history in several calls.",
+        "operationId": "getEnergyIntervals",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergySeriesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/energy/days/{date}": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "A whole local day, added up",
+        "description": "The same columns as an interval, summed over one local day in the site's own zone — so 'how was Tuesday?' is one call rather than ninety-six rows to add up. A day with nothing recorded comes back with zeroes and an interval count of 0, which is the answer, not an error.",
+        "operationId": "getEnergyDay",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnergyDayResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Charging sessions in a range",
+        "description": "Sessions that started inside [from, to), newest first. Defaults to the last 30 days. Each carries the energy split between sun, grid and the home battery — an attribution made from the power flows at each poll, not four separate meters.",
+        "operationId": "getSessions",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "One session in full",
+        "description": "The session, every poll recorded against it, and its notable moments. A session still running is returned too, but only a closed one will never change again.",
+        "operationId": "getSession",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/forecast": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "The solar forecast the controller is working from",
+        "description": "Today and tomorrow in full, period by period, from the cached forecast the poll loop is deciding on rather than a fresh fetch. Elapsed periods are included, so summing a day's periods gives that day's total in 'days' — every figure here comes from the same two days of retained forecast. Empty periods and null totals mean no forecast is in hand — no provider key, the provider is down, or nothing has been fetched yet — which the controller degrades around rather than failing.\n\n'days' carries each day's median, p10, p90 and peak, worked out when the forecast landed. Check 'complete' before treating a day's periods as the whole day: a provider answers only what is still to come, so a controller started at 10:44 has nothing for today before then, and 'heldFrom' says where that day's periods really begin. 'todayRemainingWh' is the one figure that is not a whole day.\n\nPass weather=true to also fetch current conditions; that one is a live third-party call against a quota, which is why it is off by default.",
+        "operationId": "getForecast",
+        "parameters": [
+          {
+            "name": "weather",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicle": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "What the car last said about itself",
+        "description": "State of charge, range, plug and charge state — and how old the reading is, which is part of the reading. A cloud-reported SOC arrives hours late as a matter of course, so use 'ageSeconds' and 'stale' before drawing any conclusion from the number beside them. Nothing about how the charger is driven depends on this feed: it shapes what can be asked for, never how it is delivered. 'available' is false when no feed is configured or nothing has arrived, which is a supported installation, not a fault.\n\n'vehicle' is a different kind of thing from the rest: what the car *is* rather than what it last said — its pack, and the currents and phases it will accept. That is configuration, so it changes only across a restart, and it is null when no car has been described.",
+        "operationId": "getVehicle",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plans/targeted/preview": {
+      "post": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Quote a targeted charge without starting it",
+        "description": "What would happen if this request were started now: the strategy, the pace the charger would have to hold, how much comes from the sun and how much from the grid, when the import would run, and — when it cannot be met — how short it falls and the departure that would have covered it.\n\nWrites to nothing. It sets no request, selects no mode, touches no device and does not disturb a plan already running, so it is safe to call repeatedly: 'what does 80% by seven cost, and would leaving at eight make it free?' is three calls and no hardware writes.\n\nUnder justInTime the response also carries the same request priced as cheaply as possible, so the cost of holding the last stretch back can be read off the difference in gridEnergyWh.",
+        "operationId": "previewTargetedPlan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TargetedChargeRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetedPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/charging/start": {
+      "post": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Start controlled charging in a mode",
+        "description": "Writes the charger's Fast use-mode and then selects the mode, so this works on a charger sitting in Green rather than requiring somebody to have set the wallbox by hand.\n\nFor 'targeted', pass the same target the preview took — it is set as the active request before the mode is selected, and dropped again if the charger refuses.\n\nFor 'fastNoBattery', 'fast' says how much to deliver before the mode stops itself: an amount of energy, a state of charge, or 'full' to let the car decide (the default, and what you get by omitting it). It is a stopping condition and nothing more — the charger stays pinned at the installation's maximum either way.\n\nAdd 'departBy' and the charge is deferred instead: it starts as late as it can and still finish in time, so a pack asked to go above 80% spends minutes there rather than a whole night. It needs an amount to work back from, so a departure with 'full' is refused. Read the schedule back under fastCharge.schedule on the status.\n\nA refused hardware write is reported as 200 with succeeded=false and a message, not as an HTTP error: the call was understood and the controller is in a well-defined state (exactly the one it was in before). Read the flag, not the status code.\n\nThe returned status is from the last completed poll, so the powers in it will not reflect this action until the next one lands.",
+        "operationId": "startCharging",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartChargingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/charging/start/targeted": {
+      "post": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Start a targeted charge under the limits a quoted plan was edited into",
+        "description": "Takes the same body as POST /plans/targeted/preview — quote a plan, edit its 'editable' limits, and send the whole thing here to charge under them.\n\nWhat you edit are **limits, not a schedule**, and that is the feature rather than a simplification of it. The plan is rebuilt on every poll from a refreshed forecast and the measured delivery, which is what lets a sunnier afternoon than forecast shrink the grid block before any of it is bought. Replaying a list of blocks would give that up, and would go on buying grid for energy already in the car. So the planner keeps planning — inside the window you gave it.\n\nA limit that makes the request impossible is refused here with the reason, before anything starts. A limit that merely makes it expensive or partial is accepted, and whatever it puts out of reach is reported as shortfall: a constraint may reduce what is delivered, it may never make the plan lie about what will be.\n\nSend the quoted plan's 'planId' back and 'forecastMovedSinceQuote' says whether the forecast has been refreshed since you were shown it. Advisory only — nothing is stored server-side and a start never fails because of it.",
+        "operationId": "startTargetedCharging",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TargetedChargeRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/charging/stop": {
+      "post": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Stop controlled charging",
+        "description": "Writes Stop to the charger and returns the mode to off, which releases any hold a mode had armed and closes the charging session. Always writes, even when the controller was already off and never took control — the button says stop charging, so it stops charging. Any standing targeted request or fast charge limit is cleared with it.",
+        "operationId": "stopCharging",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlActionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/battery-hold": {
+      "put": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Arm or release the battery discharge hold",
+        "description": "Stops the home battery serving house load, so the car charges from PV and grid while the pack still charges from surplus. Orthogonal to the charge mode — either can be on without the other.\n\nWhat comes back under batteryHold.active is what was last written to the inverter, not a read-back: the command register cannot be read. Judge whether a hold is really in force by batteryPowerWatts on the status, never by the flag.",
+        "operationId": "setBatteryHold",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatteryHoldRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlActionResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/charging/low-tariff-only": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Whether fastNoBattery and solarGrid wait for low tariff",
+        "description": "The owner's 'low tariff only' option for the two modes that buy from the grid, and whether there is a tariff for it to act on. With tariffKnown false, a flag that is on is ignored.",
+        "operationId": "getLowTariffOnly",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LowTariffOnlyResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Make fastNoBattery or solarGrid wait for low tariff",
+        "description": "With it on, fastNoBattery waits through high tariff and charges flat out once low tariff starts, and high tariff pauses solarGrid, sun or not. A wait is never read as a full car. Applies from the next poll, to a running mode too, and does not persist across restarts. Writes nothing to hardware itself; the mode does, on the next poll.",
+        "operationId": "setLowTariffOnly",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LowTariffOnlyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LowTariffOnlyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/charging/until-full": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Whether forecasted runs until the car is full",
+        "description": "The owner's 'until full' option for forecasted, and the session running with it: since when, and which day of it this is.",
+        "operationId": "getUntilFull",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UntilFullResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Make forecasted run until the car is full",
+        "description": "With it on, one forecasted session runs over several days: by day nothing changes, and where the mode would end for the day it stands the charger down for the night instead and starts again on the next day's sun. It ends when the car is full, is unplugged, the charger is taken over, or charging is stopped. A session running with it on is resumed after a restart. Starts nothing itself; applies from the next poll, to a running session too.",
+        "operationId": "setUntilFull",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UntilFullRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UntilFullResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tariff": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "The grid tariff now and as far ahead as it is known",
+        "description": "The selected tariff strategy's low and high stretches, the rate at this moment and when it next changes, with prices per kWh in the installation's currency. An empty timeline means no tariff restriction, never 'always low': the provider is None, or the selected one cannot answer, which 'unavailable' then explains.",
+        "operationId": "getTariff",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TariffResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tariff/providers": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "The tariff strategies this build has",
+        "description": "Each one is a way of knowing when the grid is cheap; 'provider' in the settings selects one by its id. None means no tariff.",
+        "operationId": "listTariffProviders",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TariffProviderResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tariff/settings": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "The tariff settings as stored",
+        "description": "The selection, the shared prices, and every strategy's own settings by key, including those of a strategy that is not selected.",
+        "operationId": "getTariffSettings",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TariffSettingsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Store the tariff settings, applied at once",
+        "description": "Selects a strategy and sets the shared prices, and replaces the settings of each strategy whose key is given; the others are kept. Checked by the same rules as Settings: a 400 lists every problem under 'problems', each with its field and row, and nothing is written. Warnings (a low price above the high one, no low-tariff periods) do not stop the save and come back with it. Writes no hardware; the next poll reads the new tariff.",
+        "operationId": "putTariffSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TariffSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TariffSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiIndexResponse": {
+        "required": [
+          "name",
+          "version",
+          "build",
+          "documentation",
+          "authentication",
+          "operations"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The product this is the API of."
+          },
+          "version": {
+            "type": "string",
+            "description": "The API version, which is also the path segment everything sits under."
+          },
+          "build": {
+            "type": "string",
+            "description": "The running build of the controller."
+          },
+          "documentation": {
+            "type": "string",
+            "description": "Where the OpenAPI document is served. It needs no key either."
+          },
+          "authentication": {
+            "type": "string",
+            "description": "How to present a key on every other endpoint."
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiOperationResponse"
+            },
+            "description": "Every operation this build serves, path first."
+          }
+        },
+        "description": "What this API is, and how to use it — the answer at `/api/v1/`, which is the first place\nanybody looks.\n\nThe one endpoint that needs no key. It carries nothing an unauthenticated caller could act\non: which operations exist, where the document is, and how to authenticate."
+      },
+      "ApiOperationResponse": {
+        "required": [
+          "method",
+          "path",
+          "summary"
+        ],
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "description": "The HTTP method."
+          },
+          "path": {
+            "type": "string",
+            "description": "The route."
+          },
+          "summary": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "What it answers, in a line. The same summary the OpenAPI document carries."
+          }
+        },
+        "description": "One operation, as the index lists it."
+      },
+      "BatteryHoldRequest": {
+        "required": [
+          "hold"
+        ],
+        "type": "object",
+        "properties": {
+          "hold": {
+            "type": "boolean",
+            "description": "True stops the home battery serving house load, so the car charges from PV and grid while the pack\nstill charges from surplus. Orthogonal to the charge mode: either can be on without the other."
+          }
+        },
+        "description": "Arm or release the battery discharge hold."
+      },
+      "BatteryHoldResponse": {
+        "required": [
+          "enabled",
+          "requested",
+          "active",
+          "targetWatts"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the feature is configured on at all. False means the other two can never be true."
+          },
+          "requested": {
+            "type": "boolean",
+            "description": "Whether it is switched on — somebody's intent, not the hardware's state."
+          },
+          "active": {
+            "type": "boolean",
+            "description": "Whether a hold command is currently armed on the inverter. This is what was last written, not a\nread-back: the command register cannot be read. An inverter that ignores the command still\nreports true here, so judge a hold by `batteryPowerWatts`, never by this flag."
+          },
+          "targetWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The active-power target currently commanded, or null when nothing is held.",
+            "format": "double"
+          }
+        },
+        "description": "The battery discharge hold, which stops the home battery serving house load so the car charges\nfrom PV and grid while the pack still charges from surplus."
+      },
+      "ChargeControlMode": {
+        "enum": [
+          "off",
+          "solar",
+          "forecasted",
+          "fastNoBattery",
+          "targeted",
+          "solarGrid"
+        ],
+        "description": "The charge-control mode, selectable at runtime (e.g. from Home Assistant).\n\n- `off`: Don't control the charger; leave its current setpoint exactly as it is.\n\n- `solar`: Modulate the charging current from live solar surplus while the battery is full: set the current the sun can cover, or pause when there isn't enough. Only acts while the charger's own use-mode is Fast.\n\n- `forecasted`: As Solar, but the fixed battery-full gate is replaced by a forecast-driven day plan: the Solcast forecast decides how much of today's remaining sun the car may have, so the home battery still reaches 100% by the configured evening deadline. Sub-minimum (\"shoulder\") power is left to the house and battery, the midday plateau is released to the car, and the battery may lend power briefly when the forecast can repay it. Falls back to Solar behaviour whenever no usable forecast is available. Takes no amount: the car charges until its own charge limit stops it, or the sun runs out. For an amount by a time, use Targeted.\n\n- `fastNoBattery`: Charge the car as fast as the installation allows, and keep the home battery out of it: the current setpoint is pinned at the configured maximum whatever the sun is doing (PV covers what it can, the grid covers the rest) and the battery discharge hold is armed for as long as the mode is selected. When the car stops drawing because it has reached its own charge limit, the setpoint drops to the pause current and the mode returns itself to Off, which releases the hold. Like the other modes it only acts while the charger's own use-mode is Fast.\n\n- `targeted`: Deliver a stated amount of energy by a stated departure time, with as little grid as possible: the car takes every kilowatt-hour of forecast surplus the home battery has not already claimed, and the grid covers only the remainder — in a block placed as late as it can be and still finish in time, so a sunnier afternoon than forecast shrinks it before any of it is bought. When there is not enough time left for the request, it charges flat out and reports how far short it will fall rather than pretending otherwise. The home battery keeps its priority throughout, and the discharge hold arms while the grid block runs so the pack never feeds the car. The request does not survive a restart. Like the other modes it only acts while the charger's own use-mode is Fast.\n\n- `solarGrid`: Charge from the sun with the grid allowed to help, for as long as today's sun lasts: while the smoothed surplus clears an owner-set minimum the car follows it, and a surplus that clears the minimum but not the charger's 6 A floor is topped up to the floor from the grid, with the discharge hold armed so the home battery never pays for it. There is no battery-full gate. A dip below the minimum pauses the car through the same smoothing and dwell timers the other solar modes use; once the forecast shows no sun left today that clears the minimum, the mode returns itself to Off. Like the other modes it only acts while the charger's own use-mode is Fast."
+      },
+      "ChargeControlState": {
+        "enum": [
+          "disabled",
+          "idle",
+          "charging",
+          "paused"
+        ],
+        "description": "A coarse, display-friendly summary of what charge control is doing right now.\n\n- `disabled`: Control is switched off; the charger is left to the owner.\n\n- `idle`: Enabled, but conditions aren't met (battery not full, no surplus, or not controllable).\n\n- `charging`: Actively driving the charger from solar surplus.\n\n- `paused`: Held control but suspended charging (surplus below the minimum)."
+      },
+      "ChargingSessionEndReason": {
+        "enum": [
+          "modeOff",
+          "sessionComplete",
+          "carUnplugged",
+          "serviceStopped",
+          "interrupted",
+          "targetReached",
+          "departurePassed",
+          "noSunLeftToday",
+          "chargerTakenOver",
+          null
+        ],
+        "description": "Why a recorded charging session stopped. Set once, when the session is closed. Stored by name, so members are only ever appended and a row written before a member existed still parses. A session a controller ended itself carries that controller's own reason (#198). Before that every such session was filed as SessionComplete, and rows written then cannot be told apart after the fact.\n\n- `modeOff`: The charge-control mode returned to Off: somebody switched it off.\n\n- `sessionComplete`: The car stopped drawing on its own limit while it was being asked to charge, and the mode ended itself. FastNoBattery, Targeted and SolarGrid all detect it. Distinguished from ModeOff because \"the car is full\" and \"somebody switched it off\" are the two outcomes worth telling apart when reading a session back. Sessions recorded before #198 carry this for every self-ended session, whatever ended it.\n\n- `carUnplugged`: The car was unplugged, whether the mode noticed it and ended itself or the session did.\n\n- `serviceStopped`: The service shut down gracefully while the session was open.\n\n- `interrupted`: The session was still open when the service next started, so it was ended retroactively at its last recorded sample: a crash, a power cut, or a container replaced mid-session.\n\n- `targetReached`: The energy asked for was delivered and the mode ended itself: Targeted, or FastNoBattery with an amount set.\n\n- `departurePassed`: The departure time passed before the energy asked for was delivered, and the mode ended itself: Targeted, or FastNoBattery with a departure set.\n\n- `noSunLeftToday`: SolarGrid ended itself for the day: the live surplus was under its minimum and the forecast had nothing left today that would clear it. It says nothing about the car, which may be far from full.\n\n- `chargerTakenOver`: The charger stayed out of Fast for longer than a Modbus dropout lasts, so it was no longer the mode's to drive and the mode ended itself: the wallbox went to Stop after the car finished, or its owner set another use-mode."
+      },
+      "ChargingSessionEventKind": {
+        "enum": [
+          "sessionStarted",
+          "modeChanged",
+          "chargingStarted",
+          "chargingPaused",
+          "targetCurrentChanged",
+          "batteryHoldArmed",
+          "batteryHoldReleased",
+          "planUnusable",
+          "planUsable",
+          "sessionEnded",
+          "chargerStoodDown",
+          "chargerRearmed"
+        ],
+        "description": "The sparse, human-readable things that happen inside a session. Samples say what the numbers were;\nevents say what changed and why, which is what makes a session chart legible rather than a set of\nunexplained steps.\n\n- `sessionStarted`: The session opened.\n\n- `modeChanged`: The charge-control mode changed without the session ending (e.g. Forecasted → FastNoBattery).\n\n- `chargingStarted`: Control state moved to Charging.\n\n- `chargingPaused`: Control state moved to Paused.\n\n- `targetCurrentChanged`: The commanded current setpoint changed.\n\n- `batteryHoldArmed`: The battery discharge hold was armed.\n\n- `batteryHoldReleased`: The battery discharge hold was released.\n\n- `planUnusable`: The forecast-driven day plan became unusable (no forecast, stale, or out of the trust band).\n\n- `planUsable`: A usable day plan became available again.\n\n- `sessionEnded`: The session closed.\n\n- `chargerStoodDown`: The mode put the charger in Stop for a wait, rather than holding it in Fast at 0 A (#280).\n\n- `chargerRearmed`: The mode switched a stood-down charger back to Fast to charge."
+      },
+      "ControlActionResponse": {
+        "required": [
+          "succeeded",
+          "message",
+          "target",
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "succeeded": {
+            "type": "boolean",
+            "description": "Whether the action was carried out. False is a real answer, not an error: a hardware write can fail,\nand the mode is then left exactly as it was."
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Why it failed, when it did. Null on success."
+          },
+          "target": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The targeted request now in force, or null when there is none.",
+                "$ref": "#/components/schemas/TargetedRequestResponse"
+              }
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The controller's state after the action. Note that the fields the poll loop owns — powers, the\ncharger's read-back current — are from the <em>last</em> poll and will not reflect this action until\nthe next one completes. Null only when no poll has completed since startup.",
+                "$ref": "#/components/schemas/StatusResponse"
+              }
+            ]
+          },
+          "fast": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The fast charge's limit now in force, or null when the fast charge is unlimited or another mode is\nrunning. Reported with nothing delivered yet: this is the action's answer, and the meter starts on\nthe next poll.",
+                "$ref": "#/components/schemas/FastChargeResponse"
+              }
+            ]
+          },
+          "forecastMovedSinceQuote": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "Whether the solar forecast has been refreshed since the plan you were quoted was built — only when\nyou sent that plan's `planId` back, and null whenever there is no way to tell. Advisory: the\ncharge started either way, and the plan is rebuilt from the current forecast on the next poll\nregardless."
+          }
+        },
+        "description": "What an action did, and what the controller looks like afterwards — so a caller never has to poll\nto find out whether the thing it asked for happened."
+      },
+      "EditablePlanBody": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Identifies the plan this was quoted from. <b>Advisory only</b>: send it back and the start response\nwill tell you whether the forecast has moved since, which is worth knowing and is never a lock —\nnothing is stored server-side and a start never fails because of it."
+          },
+          "notBefore": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The charger may not run before this. Null for no lower bound.",
+            "format": "date-time"
+          },
+          "notAfter": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The charger may not run after this. Null for no upper bound; the deadline applies regardless, so\nthis can only pull the window in.",
+            "format": "date-time"
+          },
+          "forbiddenWindows": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TimeWindowBody"
+            },
+            "description": "Stretches that must stay idle — a tariff's peak hours, a neighbour asleep the other side of the\nwall. Overlapping and out-of-order entries are fine; what matters is the union."
+          },
+          "maxGridEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The most that may be bought over the whole plan. Null for no cap. <b>Zero is a real value</b> and\nmeans sun only: the request is met from the roof or not at all, and the rest is reported as\nshortfall rather than quietly imported.",
+            "format": "double"
+          },
+          "lowTariffOnly": {
+            "type": "boolean",
+            "description": "Charge in low tariff only: the charger waits through every high-tariff stretch of the tariff\nselected on Settings, sun or not, and the plan counts only on low-tariff hours. Ignored when no\ntariff is selected. Sent together with sun only (MaxGridEnergyWh 0), sun only\nwins and this comes back false.",
+            "default": false
+          }
+        },
+        "description": "What a caller may change about a quoted plan (issue #128), and the whole of it.\n\nLimits, not a schedule — and the distinction is the feature, not a simplification of\nit. The plan is rebuilt on every poll from a refreshed forecast and the measured delivery, which is\nwhat lets a sunnier afternoon than forecast shrink the grid block before any of it is bought. Hand\nback a list of blocks to replay and that stops happening; worse, the blocks go on being executed\nagainst a delivered-energy figure that stopped being true the moment they were quoted. So what you\nedit are the bounds, and the planner keeps planning inside them.\n\nEvery field is optional and every one of them can only ever narrow the plan. Sending\nnone of them is the same as not sending this at all."
+      },
+      "EnergyDayResponse": {
+        "required": [
+          "date",
+          "timeZoneId",
+          "from",
+          "to",
+          "solarWh",
+          "forecastSolarWh",
+          "gridImportWh",
+          "gridExportWh",
+          "evWh",
+          "batteryChargeWh",
+          "batteryDischargeWh",
+          "houseLoadWh",
+          "otherLoadsWh",
+          "socStartPercent",
+          "socEndPercent",
+          "socMinPercent",
+          "socMaxPercent",
+          "intervalCount",
+          "coverage"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "The local day.",
+            "format": "date"
+          },
+          "timeZoneId": {
+            "type": "string",
+            "description": "The zone it was measured in."
+          },
+          "from": {
+            "type": "string",
+            "description": "The instant the day started.",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "description": "The instant it ended.",
+            "format": "date-time"
+          },
+          "solarWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the roof produced.",
+            "format": "double"
+          },
+          "forecastSolarWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "What the forecast said it would, summed over the windows that had one.",
+            "format": "double"
+          },
+          "gridImportWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy drawn from the grid.",
+            "format": "double"
+          },
+          "gridExportWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy pushed to the grid.",
+            "format": "double"
+          },
+          "evWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy delivered to the car.",
+            "format": "double"
+          },
+          "batteryChargeWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy into the home battery.",
+            "format": "double"
+          },
+          "batteryDischargeWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy out of the home battery.",
+            "format": "double"
+          },
+          "houseLoadWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Everything the house consumed, the car included.",
+            "format": "double"
+          },
+          "otherLoadsWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "House consumption with the car taken out.",
+            "format": "double"
+          },
+          "socStartPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Home battery SOC at the first window of the day, or null when the day has no rows.",
+            "format": "double"
+          },
+          "socEndPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "SOC at the last window, or null when the day has no rows.",
+            "format": "double"
+          },
+          "socMinPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Lowest SOC observed across the day.",
+            "format": "double"
+          },
+          "socMaxPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Highest SOC observed across the day.",
+            "format": "double"
+          },
+          "intervalCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "How many windows were recorded. A complete quarter-hourly day is 96.",
+            "format": "int32"
+          },
+          "coverage": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The mean observed fraction across the day's windows, 0 to 1. Below 1 the totals above are short by\nroughly that much — the service was not running for all of it.",
+            "format": "double"
+          }
+        },
+        "description": "A whole local day added up, so \"how was Tuesday?\" does not mean fetching ninety-six rows and summing\nthem. The same columns as an interval, over a day measured in the site's own zone — so the\nclocks-change days are the 23 and 25 hours they really are."
+      },
+      "EnergyIntervalResponse": {
+        "required": [
+          "periodStart",
+          "periodEnd",
+          "localDate",
+          "timeZoneId",
+          "solarWh",
+          "forecastSolarWh",
+          "gridImportWh",
+          "gridExportWh",
+          "evWh",
+          "batteryChargeWh",
+          "batteryDischargeWh",
+          "houseLoadWh",
+          "otherLoadsWh",
+          "socStartPercent",
+          "socEndPercent",
+          "socMinPercent",
+          "socMaxPercent",
+          "socMeanPercent",
+          "coverage",
+          "sampleCount"
+        ],
+        "type": "object",
+        "properties": {
+          "periodStart": {
+            "type": "string",
+            "description": "Start of the window, inclusive.",
+            "format": "date-time"
+          },
+          "periodEnd": {
+            "type": "string",
+            "description": "End of the window, exclusive.",
+            "format": "date-time"
+          },
+          "localDate": {
+            "type": "string",
+            "description": "The local day this window belongs to, in the site's own zone.",
+            "format": "date"
+          },
+          "timeZoneId": {
+            "type": "string",
+            "description": "The zone that local day was computed in."
+          },
+          "solarWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the roof produced.",
+            "format": "double"
+          },
+          "forecastSolarWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "What the forecast said it would produce, or null when no forecast covered the window.",
+            "format": "double"
+          },
+          "gridImportWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy drawn from the grid. Export is not subtracted from it.",
+            "format": "double"
+          },
+          "gridExportWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy pushed to the grid, as a positive number.",
+            "format": "double"
+          },
+          "evWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy delivered to the car, measured at the charger.",
+            "format": "double"
+          },
+          "batteryChargeWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy into the home battery.",
+            "format": "double"
+          },
+          "batteryDischargeWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy out of the home battery, as a positive number.",
+            "format": "double"
+          },
+          "houseLoadWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Everything the house consumed, the car included — the residual of the energy balance.",
+            "format": "double"
+          },
+          "otherLoadsWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "House consumption with the car taken out.",
+            "format": "double"
+          },
+          "socStartPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Home battery SOC at the start of the window.",
+            "format": "double"
+          },
+          "socEndPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "SOC at the last reading inside it.",
+            "format": "double"
+          },
+          "socMinPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Lowest SOC observed.",
+            "format": "double"
+          },
+          "socMaxPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Highest SOC observed.",
+            "format": "double"
+          },
+          "socMeanPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Time-weighted mean SOC.",
+            "format": "double"
+          },
+          "coverage": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "How much of the window was actually observed, 0 to 1. Read this before trusting a row. Below\n1 the service was starting, stopping or had lost the inverter, and every energy figure above is\nshort by the same fraction — a restart at 09:07 is not the sun going out for seven minutes.",
+            "format": "double"
+          },
+          "sampleCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "How many poll snapshots fed the window. Diagnostic only.",
+            "format": "int32"
+          }
+        },
+        "description": "One window of the site's energy history — by default a quarter hour — recorded whether or not\nanything was charging.\n\nEvery figure is in watt-hours over the window, and none of them are signed: import and\nexport, charge and discharge, are separate columns rather than one number that changes sign."
+      },
+      "EnergySeriesResponse": {
+        "required": [
+          "from",
+          "to",
+          "count",
+          "intervals"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "The start of the range that was queried, inclusive.",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "description": "The end of the range that was queried, exclusive.",
+            "format": "date-time"
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "How many windows came back.",
+            "format": "int32"
+          },
+          "intervals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnergyIntervalResponse"
+            },
+            "description": "The windows themselves."
+          }
+        },
+        "description": "The interval series for a requested range, oldest first."
+      },
+      "EvChargerStatus": {
+        "enum": [
+          "available",
+          "preparing",
+          "charging",
+          "finishing",
+          "faulted",
+          "unavailable",
+          "reserved",
+          "suspendedEv",
+          "suspendedEvse",
+          "update",
+          "cardActivation",
+          "startDelay",
+          "chargePaused",
+          "stopping",
+          "unknown"
+        ],
+        "description": "What the EV charger reports it is doing, in OCPP 1.6's status names. Each charger driver maps its own\nfamily's state onto these (issue #348). The values happen to match the SolaX charger's RunMode\nregister (0-13), which follows the same names, so its driver maps by a cast.\n\nRead carefully rather than at face value: three of these look like \"the car is done\" and only\none of them means it — see EvChargerStatusExtensions.IsCarKnownDisconnected in Core and the\nmembers below."
+      },
+      "EvResponse": {
+        "required": [
+          "id",
+          "name",
+          "make",
+          "model",
+          "batteryCapacityWh",
+          "chargeEfficiency",
+          "phases",
+          "minChargingCurrentAmps",
+          "maxChargingCurrentAmps"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Its stable identity, or empty when unnamed."
+          },
+          "name": {
+            "type": "string",
+            "description": "What a human calls it."
+          },
+          "make": {
+            "type": "string",
+            "description": "The manufacturer. Reported, never acted on."
+          },
+          "model": {
+            "type": "string",
+            "description": "The model. Reported, never acted on."
+          },
+          "batteryCapacityWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Usable capacity in Wh — the figure its SOC is a percentage of. Zero when unconfigured.",
+            "format": "double"
+          },
+          "chargeEfficiency": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Charger-meter → cells efficiency, applied to SOC-based targets.",
+            "format": "double"
+          },
+          "phases": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Phases the <b>car</b> can charge on, or null when unstated. Where this differs from the charger's,\nthis is the one every power figure is computed from.",
+            "format": "int32"
+          },
+          "minChargingCurrentAmps": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The lowest current it will start on, or null when unstated.",
+            "format": "int32"
+          },
+          "maxChargingCurrentAmps": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "Its on-board ceiling, or null when unstated.",
+            "format": "int32"
+          }
+        },
+        "description": "The car itself (issue #124): what it is and what it will accept, as distinct from the reading it\nlast sent. Configuration, so it changes only across a restart."
+      },
+      "FastChargeBasis": {
+        "enum": [
+          "full",
+          "energy",
+          "soc"
+        ],
+        "description": "What a fast charge is being asked for — the three-way question the targeted form already asks,\nminus the deadline. It says <b>when to stop</b>, and nothing else: no plan is built from it, no\nforecast is consulted, and the current stays pinned at the installation's maximum throughout.\n\n- `full`: No limit. The car decides when it has had enough and stops drawing, and the mode ends itself on that — which is what FastNoBattery did before it could be asked for an amount, and what it still does for anyone who does not ask.\n\n- `energy`: An amount of energy, at the charger. \"20 kWh, now.\"\n\n- `soc`: A state of charge, converted to energy once at activation. \"To 60%, now.\" Offered only where it can be honoured — see CanTargetSoc.",
+        "default": "full"
+      },
+      "FastChargeLimitBody": {
+        "type": "object",
+        "properties": {
+          "basis": {
+            "description": "What is being aimed at. `full` needs neither figure below; `energy` reads\nEnergyWh; `soc` reads TargetSocPercent and needs both a\nconfigured pack capacity and a reported reading from the car.",
+            "$ref": "#/components/schemas/FastChargeBasis"
+          },
+          "energyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The energy to deliver in Wh, measured at the charger.",
+            "format": "double"
+          },
+          "targetSocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The state of charge to stop at. Converted to energy <b>once</b>, when the mode is started, and never\nre-derived from a later reading — a parked car's cloud SOC arrives when it feels like it, and a\nlimit already half delivered must not move because the car finally phoned home.",
+            "format": "double"
+          },
+          "departBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the car has to be ready, or omitted to charge from the moment the mode starts.\n\nWith a departure the charge is deferred: the controller works out the latest moment it\ncan begin and still finish in time, waits, and then charges flat out. The reason to want it is the\npack — a car asked to go above 80% and charged at 22:00 sits there all night, and it is the sitting\nrather than the charging that ages the cells.\n\nIt needs one of the amounts above to work back from: a departure with full is refused,\nbecause there is no duration and so no such thing as the latest moment it could start.",
+            "format": "date-time"
+          }
+        },
+        "description": "How much a fast charge should deliver before it stops itself (#119). A <b>stopping condition</b>,\nnot a plan: the charger stays pinned at the installation's maximum throughout, and nothing here\ndefers anything to a sunnier hour. That is what the targeted mode is for.\n\nOmitting this from a fastNoBattery start is the same as sending full, which is\nhow the mode behaved before it could be given an amount: the car decides when it has had enough."
+      },
+      "FastChargeResponse": {
+        "required": [
+          "requiredEnergyWh",
+          "deliveredEnergyWh",
+          "remainingEnergyWh",
+          "activatedAt",
+          "targetSocPercent",
+          "vehicleSocPercentAtRequest"
+        ],
+        "type": "object",
+        "properties": {
+          "requiredEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The energy asked for, at the charger.",
+            "format": "double"
+          },
+          "deliveredEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What has been delivered against it since it was set.",
+            "format": "double"
+          },
+          "remainingEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What is still to come, floored at zero.",
+            "format": "double"
+          },
+          "activatedAt": {
+            "type": "string",
+            "description": "When the limit was set. Delivery is metered from here, not from when the car plugged in.",
+            "format": "date-time"
+          },
+          "targetSocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The state of charge asked for, when it was asked that way round.",
+            "format": "double"
+          },
+          "vehicleSocPercentAtRequest": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "What the car was reporting when the conversion was made.",
+            "format": "double"
+          },
+          "departBy": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the car has to be ready, when a departure was asked for. Null on a charge-now request.",
+            "format": "date-time"
+          },
+          "schedule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "When the deferred charge starts, and whether it fits. Null when no departure was asked for, and\nnull in an action's answer — the schedule is built by the poll loop, so it first appears on the\nstatus.",
+                "$ref": "#/components/schemas/FastChargeScheduleResponse"
+              }
+            ]
+          }
+        },
+        "description": "The fast charge's limit and how it is going, or absent when there is no limit."
+      },
+      "FastChargeScheduleResponse": {
+        "required": [
+          "readyBy",
+          "startNoLaterThan",
+          "durationSeconds",
+          "remainingEnergyWh",
+          "chargePowerWatts",
+          "powerObserved",
+          "shortfallEnergyWh"
+        ],
+        "type": "object",
+        "properties": {
+          "readyBy": {
+            "type": "string",
+            "description": "When the charge must be finished: the departure less the safety margin.",
+            "format": "date-time"
+          },
+          "startNoLaterThan": {
+            "type": "string",
+            "description": "The latest instant charging can begin and still reach ReadyBy. In the past when\nthere is already too little time, which is deliberate: a plan clamped forward would read as punctual.",
+            "format": "date-time"
+          },
+          "durationSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "How long the remaining energy needs at ChargePowerWatts.",
+            "format": "double"
+          },
+          "remainingEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What is still to deliver.",
+            "format": "double"
+          },
+          "chargePowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The power this is computed at. The car's own, once it has drawn anything; the installation's maximum\nbefore that.",
+            "format": "double"
+          },
+          "powerObserved": {
+            "type": "boolean",
+            "description": "Whether that power was measured at the car (true) or assumed from configuration (false). False means\nthe schedule is a well-founded guess — a car with a smaller on-board charger than the wallbox is not\nknowable until it draws."
+          },
+          "shortfallEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "How much will not fit before ReadyBy. Zero on a feasible plan. Non-zero never\nstops the charge — the charger runs flat out and delivers what it can — it is a promise declined.",
+            "format": "double"
+          }
+        },
+        "description": "When a deferred fast charge starts. One division and the clock — there are no blocks here and no\nforecast; see the targeted plan for those."
+      },
+      "ForecastDayResponse": {
+        "required": [
+          "date",
+          "expectedWh",
+          "lowWh",
+          "highWh",
+          "peakWatts",
+          "complete",
+          "heldFrom"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "The local calendar date, as the site's own time zone reckons it.",
+            "format": "date"
+          },
+          "expectedWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The median estimate for the whole day, in watt-hours.",
+            "format": "double"
+          },
+          "lowWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The p10 estimate for the day: a figure it should beat about nine times in ten. A period the provider\nsent no p10 for counts at its median, exactly as a period's own band does, so a partial response\ncannot read as darkness.",
+            "format": "double"
+          },
+          "highWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The p90 estimate, with the same fallback. The gap to 'lowWh' is how sure the sky is.",
+            "format": "double"
+          },
+          "peakWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The strongest half hour the median expects, in watts.",
+            "format": "double"
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "Whether the whole day is held. <b>False is ordinary, not a fault</b>: a provider answers only what\nis still to come, so a controller started at 10:44 has nothing for today before then. A caller that\nreads an incomplete day's periods as the whole day will under-report production and be wrong about\nthe day — which is why this is a field rather than something to be inferred from the first period."
+          },
+          "heldFrom": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Where the held periods for this day actually begin, or null when the whole day is held. Always the\nstart of a period, never \"now\".",
+            "format": "date-time"
+          }
+        },
+        "description": "One local calendar day of forecast, reduced to the figures a caller would otherwise have to sum\nforty-eight periods for — and to whether summing them would even be right.\n\nThe four figures are the same ones the dashboard's forecast table and the /forecast\npage show, read from the summary the source worked out when its forecast landed rather than\nrecomputed per request."
+      },
+      "ForecastPeriodResponse": {
+        "required": [
+          "periodStart",
+          "periodEnd",
+          "estimatedPowerWatts",
+          "estimatedPowerWattsP10",
+          "estimatedPowerWattsP90",
+          "energyWh"
+        ],
+        "type": "object",
+        "properties": {
+          "periodStart": {
+            "type": "string",
+            "description": "Start of the window.",
+            "format": "date-time"
+          },
+          "periodEnd": {
+            "type": "string",
+            "description": "End of the window.",
+            "format": "date-time"
+          },
+          "estimatedPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The median estimate — the average power expected across the window.",
+            "format": "double"
+          },
+          "estimatedPowerWattsP10": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The \"almost certainly at least this much\" estimate, or null when the provider did not supply one.\nThe day plan's guarantees are built on this band, not the median.",
+            "format": "double"
+          },
+          "estimatedPowerWattsP90": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The optimistic estimate, or null when not supplied.",
+            "format": "double"
+          },
+          "energyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the median estimate amounts to over the window.",
+            "format": "double"
+          }
+        },
+        "description": "One forecast window: what the roof is expected to make, and how sure the provider is."
+      },
+      "ForecastResponse": {
+        "required": [
+          "retrievedAt",
+          "days",
+          "todayExpectedWh",
+          "todayRemainingWh",
+          "tomorrowExpectedWh",
+          "peakPowerWatts",
+          "periods",
+          "weather"
+        ],
+        "type": "object",
+        "properties": {
+          "retrievedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the forecast behind this response was fetched from the provider.",
+            "format": "date-time"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ForecastDayResponse"
+            },
+            "description": "One entry per local day covered, today first — the day's own figures, and whether the whole of it is\nheld. This is where the p10 and p90 <i>day</i> totals live; the top-level `today…` fields carry\nonly the median."
+          },
+          "todayExpectedWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Expected production over the whole of today, local.",
+            "format": "double"
+          },
+          "todayRemainingWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Expected production from now to the end of today. Deliberately the one figure that is not a whole\nday: \"what is left\" is a different question from \"what the day was expected to bring\".",
+            "format": "double"
+          },
+          "tomorrowExpectedWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Expected production over the whole of tomorrow.",
+            "format": "double"
+          },
+          "peakPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The highest power any period in the returned window expects — the strongest half hour of the two\ndays, which no longer shrinks as the day goes on.",
+            "format": "double"
+          },
+          "periods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ForecastPeriodResponse"
+            },
+            "description": "The periods themselves, oldest first, covering the whole of today and tomorrow — <b>elapsed periods\nincluded</b>. Each carries the median estimate and, when the provider supplies them, the p10 and p90\nbands. Today's can begin after midnight; read 'complete' on the day before treating its periods as\nthe whole of it."
+          },
+          "weather": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The current conditions, or null when no weather provider is configured or the fetch failed.",
+                "$ref": "#/components/schemas/WeatherResponse"
+              }
+            ]
+          }
+        },
+        "description": "The solar forecast for the site, as the controller is currently working from it.\n\nCached, not fetched per call: the same forecast the poll loop is deciding on, refreshed on\nits own schedule. retrievedAt says how current it is.\n\nOne source, so the response agrees with itself (issue #221). Every figure here comes\nfrom the same two local days of retained forecast, which means sum(periods on a date) is\ndays[date].expectedWh and peakPowerWatts is the peak of the periods returned. It did\nnot used to be: the periods came from the live cache, which holds only what is still to come, while\nthe day totals came from the retained history, which holds the whole day — so a caller summing the\nperiods for today got a smaller number than the response's own total beside it."
+      },
+      "HealthResponse": {
+        "required": [
+          "ok",
+          "version",
+          "systemId",
+          "systemName",
+          "now",
+          "timeZoneId",
+          "lastPollAt",
+          "lastPollAgeSeconds",
+          "mode",
+          "dryRun",
+          "forecastAvailable",
+          "forecastRetrievedAt",
+          "weatherConfigured",
+          "vehicleAvailable",
+          "vehicleAgeSeconds",
+          "vehicleStale",
+          "energyHistoryAvailable",
+          "sessionHistoryAvailable",
+          "secretStore"
+        ],
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "Whether a poll has completed recently enough to trust everything else being reported. False means\nthe figures on `/status` are stale or absent — the inverter is unreachable, or the service has\nonly just started."
+          },
+          "version": {
+            "type": "string",
+            "description": "The running build."
+          },
+          "systemId": {
+            "type": "string",
+            "description": "The installation's stable id — the MQTT topic segment and HA device id."
+          },
+          "systemName": {
+            "type": "string",
+            "description": "What this installation is called."
+          },
+          "now": {
+            "type": "string",
+            "description": "The controller's own clock, so a caller can tell a stale reading from a skewed clock.",
+            "format": "date-time"
+          },
+          "timeZoneId": {
+            "type": "string",
+            "description": "The zone every local-time decision here is made in."
+          },
+          "lastPollAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the last poll completed, or null when none has since startup.",
+            "format": "date-time"
+          },
+          "lastPollAgeSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "How long ago that was.",
+            "format": "double"
+          },
+          "mode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The mode currently selected, or null when no poll has completed.",
+                "$ref": "#/components/schemas/ChargeControlMode"
+              }
+            ]
+          },
+          "dryRun": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "Whether charge control is deciding without writing to the charger."
+          },
+          "forecastAvailable": {
+            "type": "boolean",
+            "description": "Whether a usable solar forecast is in hand."
+          },
+          "forecastRetrievedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When it was fetched.",
+            "format": "date-time"
+          },
+          "weatherConfigured": {
+            "type": "boolean",
+            "description": "Whether a weather provider is configured at all."
+          },
+          "vehicleAvailable": {
+            "type": "boolean",
+            "description": "Whether any vehicle reading has arrived."
+          },
+          "vehicleAgeSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "How old that reading is.",
+            "format": "double"
+          },
+          "vehicleStale": {
+            "type": "boolean",
+            "description": "Whether it is past the configured maximum age — a dead feed rather than an old number."
+          },
+          "energyHistoryAvailable": {
+            "type": "boolean",
+            "description": "Whether the energy-interval store answered a probe query."
+          },
+          "sessionHistoryAvailable": {
+            "type": "boolean",
+            "description": "Whether the charging-session store answered a probe query."
+          },
+          "secretStore": {
+            "type": "string",
+            "description": "What protects the secrets in the data directory (issue #215) — `owner-only files (0600) in the\ndata directory`, `Windows DPAPI, this user`. Deliberately not the word <i>encrypted</i>: the\ncontroller must come back from a restart unattended, so whatever protects a stored secret is\nundoable by this process without a person, and a claim of encryption a local root can undo is the\nsentence someone repeats when deciding where to put a backup. <b>The data directory is\nsecret-bearing whichever this says.</b>"
+          }
+        },
+        "description": "Whether the controller is alive and what it can currently see. The endpoint to poll when the\nquestion is \"is this thing working?\" rather than \"what is the roof doing?\"."
+      },
+      "LowTariffOnlyRequest": {
+        "type": "object",
+        "properties": {
+          "fastNoBattery": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "With true, `fastNoBattery` waits through high tariff and charges flat out in low."
+          },
+          "solarGrid": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "With true, high tariff pauses `solarGrid`, sun or not."
+          }
+        },
+        "description": "Change <i>low tariff only</i> for one or both of the modes that buy from the grid (issue #274). A\nfield left out, or null, is left as it is."
+      },
+      "LowTariffOnlyResponse": {
+        "required": [
+          "fastNoBattery",
+          "solarGrid",
+          "tariffKnown"
+        ],
+        "type": "object",
+        "properties": {
+          "fastNoBattery": {
+            "type": "boolean",
+            "description": "Whether `fastNoBattery` waits for low tariff."
+          },
+          "solarGrid": {
+            "type": "boolean",
+            "description": "Whether `solarGrid` does."
+          },
+          "tariffKnown": {
+            "type": "boolean",
+            "description": "Whether there is a tariff to wait for. False with no tariff selected (see GET /tariff), and then a flag\nthat is on is ignored: the mode charges whatever the hour."
+          }
+        },
+        "description": "<i>Low tariff only</i> as the controller is using it. Takes effect on the next poll, including for a\nmode already running; it does not persist across restarts."
+      },
+      "LowTariffStatusResponse": {
+        "required": [
+          "waiting",
+          "until",
+          "ignored"
+        ],
+        "type": "object",
+        "properties": {
+          "waiting": {
+            "type": "boolean",
+            "description": "True while the mode holds the car back through high tariff."
+          },
+          "until": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When low tariff starts, while waiting; null when that is beyond what the tariff knows.",
+            "format": "date-time"
+          },
+          "ignored": {
+            "type": "boolean",
+            "description": "True when the option is set but there is no tariff to wait for, so the mode charges whatever the hour."
+          }
+        },
+        "description": "What <i>low tariff only</i> is doing for the mode driving."
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "instance": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SessionDetailResponse": {
+        "required": [
+          "schemaVersion",
+          "session",
+          "samples",
+          "events"
+        ],
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "The version of the recorded document these samples were written under.",
+            "format": "int32"
+          },
+          "session": {
+            "description": "The session summary, identical to the one the listing returns.",
+            "$ref": "#/components/schemas/SessionResponse"
+          },
+          "samples": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionSampleResponse"
+            },
+            "description": "Every poll recorded against the session, oldest first."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionEventResponse"
+            },
+            "description": "The notable moments: mode changes, holds armed, the car going quiet."
+          }
+        },
+        "description": "A session in full: the summary, every poll recorded against it, and the notable moments.\n\nAn open session is returned too — a caller may want to watch one in progress — but only a\nclosed one will never change again."
+      },
+      "SessionEventResponse": {
+        "required": [
+          "timestamp",
+          "kind",
+          "detail"
+        ],
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "description": "When it happened.",
+            "format": "date-time"
+          },
+          "kind": {
+            "description": "What kind of moment it was.",
+            "$ref": "#/components/schemas/ChargingSessionEventKind"
+          },
+          "detail": {
+            "type": "string",
+            "description": "A short human-readable description."
+          }
+        },
+        "description": "A notable moment inside a session."
+      },
+      "SessionListResponse": {
+        "required": [
+          "from",
+          "to",
+          "count",
+          "truncated",
+          "sessions"
+        ],
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "The start of the range that was queried, inclusive.",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "description": "The end of the range that was queried, exclusive.",
+            "format": "date-time"
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "How many sessions came back.",
+            "format": "int32"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether the range held more sessions than the limit allowed back."
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionResponse"
+            },
+            "description": "The sessions themselves."
+          }
+        },
+        "description": "Sessions that started inside a requested range, newest first."
+      },
+      "SessionResponse": {
+        "required": [
+          "id",
+          "startedAt",
+          "endedAt",
+          "timeZoneId",
+          "startMode",
+          "endMode",
+          "endReason",
+          "controlled",
+          "energyDeliveredWh",
+          "fromSolarWh",
+          "fromGridWh",
+          "fromBatteryWh",
+          "loanedWh",
+          "solarFraction",
+          "peakChargingPowerWatts",
+          "startBatterySocPercent",
+          "endBatterySocPercent",
+          "forecastRemainingAtStartWh",
+          "sunrise",
+          "sunset",
+          "weatherAtStart",
+          "weatherAtEnd"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The session's identifier, as used by the detail endpoint.",
+            "format": "uuid"
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "When the controller took charge of the session.",
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When it ended, or null while it is still running.",
+            "format": "date-time"
+          },
+          "timeZoneId": {
+            "type": "string",
+            "description": "The site's zone at the time, so the local day is recoverable."
+          },
+          "startMode": {
+            "description": "The mode that started it.",
+            "$ref": "#/components/schemas/ChargeControlMode"
+          },
+          "endMode": {
+            "description": "The mode in force when it ended.",
+            "$ref": "#/components/schemas/ChargeControlMode"
+          },
+          "endReason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Why it ended, or null while it is still running.",
+                "$ref": "#/components/schemas/ChargingSessionEndReason"
+              }
+            ]
+          },
+          "controlled": {
+            "type": "boolean",
+            "description": "Whether the controller actually drove the charger, as against merely watching a session it never took."
+          },
+          "energyDeliveredWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Total energy into the car, measured at the charger.",
+            "format": "double"
+          },
+          "fromSolarWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The part attributed to surplus PV.",
+            "format": "double"
+          },
+          "fromGridWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The part attributed to imported energy.",
+            "format": "double"
+          },
+          "fromBatteryWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The part attributed to the home battery.",
+            "format": "double"
+          },
+          "loanedWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy the home battery lent to the charge, expecting the forecast to repay it.",
+            "format": "double"
+          },
+          "solarFraction": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The solar share of the delivery, 0 to 1, or null when nothing was delivered.",
+            "format": "double"
+          },
+          "peakChargingPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The highest charging power reached.",
+            "format": "double"
+          },
+          "startBatterySocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Home battery SOC when the session opened.",
+            "format": "double"
+          },
+          "endBatterySocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Home battery SOC when it closed, or null while it is open.",
+            "format": "double"
+          },
+          "forecastRemainingAtStartWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "What the forecast still expected from the roof when it opened.",
+            "format": "double"
+          },
+          "sunrise": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Sunrise on the day it started, when weather was recorded.",
+            "format": "date-time"
+          },
+          "sunset": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Sunset on the day it started, when weather was recorded.",
+            "format": "date-time"
+          },
+          "weatherAtStart": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The conditions when it opened, or null when no weather provider is configured.",
+                "$ref": "#/components/schemas/WeatherResponse"
+              }
+            ]
+          },
+          "weatherAtEnd": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The conditions when it closed.",
+                "$ref": "#/components/schemas/WeatherResponse"
+              }
+            ]
+          }
+        },
+        "description": "One controlled charging session: when it ran, what drove it, and where the energy came from.\n\nThe three source figures sum to energyDeliveredWh. They are an attribution made from\nthe instantaneous power flows at each poll, not four separate meters — the split is as good as the\npolling interval, and no better."
+      },
+      "SessionSampleResponse": {
+        "required": [
+          "timestamp",
+          "mode",
+          "state",
+          "chargerStatus",
+          "batterySocPercent",
+          "solarPowerWatts",
+          "gridPowerWatts",
+          "batteryPowerWatts",
+          "evChargerPowerWatts",
+          "evChargingCurrentAmps",
+          "activeCurrentAmps",
+          "targetCurrentAmps",
+          "fromSolarWatts",
+          "fromGridWatts",
+          "fromBatteryWatts",
+          "energyDeliveredWh",
+          "fromSolarWh",
+          "fromGridWh",
+          "fromBatteryWh",
+          "loanedWh",
+          "solarWh",
+          "forecastSolarWh",
+          "gridImportWh",
+          "vehicleSocPercent",
+          "vehicleSocCapturedAt",
+          "surplusWatts",
+          "loanPowerWatts",
+          "batteryHoldActive",
+          "forecastPowerWatts"
+        ],
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "description": "When the poll completed.",
+            "format": "date-time"
+          },
+          "mode": {
+            "description": "The mode in force.",
+            "$ref": "#/components/schemas/ChargeControlMode"
+          },
+          "state": {
+            "description": "Coarse state of charge control.",
+            "$ref": "#/components/schemas/ChargeControlState"
+          },
+          "chargerStatus": {
+            "description": "The charger's own status.",
+            "$ref": "#/components/schemas/EvChargerStatus"
+          },
+          "batterySocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Home battery state of charge.",
+            "format": "double"
+          },
+          "solarPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "PV production at that instant.",
+            "format": "double"
+          },
+          "gridPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Grid meter power: positive is importing.",
+            "format": "double"
+          },
+          "batteryPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Home battery power: positive is charging.",
+            "format": "double"
+          },
+          "evChargerPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the charger was drawing.",
+            "format": "double"
+          },
+          "evChargingCurrentAmps": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Charging current derived from that power.",
+            "format": "int32"
+          },
+          "activeCurrentAmps": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The charger's active setpoint as read back.",
+            "format": "int32"
+          },
+          "targetCurrentAmps": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The setpoint the controller wanted.",
+            "format": "int32"
+          },
+          "fromSolarWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The part of the charge attributed to PV at that instant.",
+            "format": "double"
+          },
+          "fromGridWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The part attributed to import.",
+            "format": "double"
+          },
+          "fromBatteryWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The part attributed to the home battery.",
+            "format": "double"
+          },
+          "energyDeliveredWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Running total into the car.",
+            "format": "double"
+          },
+          "fromSolarWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Running total attributed to PV.",
+            "format": "double"
+          },
+          "fromGridWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Running total attributed to import.",
+            "format": "double"
+          },
+          "fromBatteryWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Running total attributed to the home battery.",
+            "format": "double"
+          },
+          "loanedWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Running total lent by the home battery.",
+            "format": "double"
+          },
+          "solarWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Running total the roof produced during the session.",
+            "format": "double"
+          },
+          "forecastSolarWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "What the forecast expected the roof to produce over the same stretch.",
+            "format": "double"
+          },
+          "gridImportWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Running total imported during the session, the car included.",
+            "format": "double"
+          },
+          "vehicleSocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "What the car reported, when there is a vehicle feed.",
+            "format": "double"
+          },
+          "vehicleSocCapturedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the car reported it — routinely hours before this poll.",
+            "format": "date-time"
+          },
+          "surplusWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The averaged surplus being decided on.",
+            "format": "double"
+          },
+          "loanPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the home battery was lending at that instant.",
+            "format": "double"
+          },
+          "batteryHoldActive": {
+            "type": "boolean",
+            "description": "Whether a hold was armed. What was written, not a read-back."
+          },
+          "forecastPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "What the forecast expected the roof to be making at that instant.",
+            "format": "double"
+          }
+        },
+        "description": "One poll inside a session: the instantaneous flows, the running totals, and what the plan and the\ncar looked like at that moment."
+      },
+      "SiteDeviceResponse": {
+        "required": [
+          "id",
+          "name",
+          "model",
+          "host",
+          "port",
+          "unitId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Its identity within the system — for a charger, the id its topics are named after."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, or empty."
+          },
+          "model": {
+            "type": "string",
+            "description": "What the box is. <b>Reported, not acted on:</b> what the controller speaks to the inverter is chosen by\nthe site's `InverterDriver`, so this says what the operator believes is on the other end of the\naddress, not what the controller is speaking."
+          },
+          "host": {
+            "type": "string",
+            "description": "Hostname or IP address on the local network."
+          },
+          "port": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Modbus TCP port.",
+            "format": "int32"
+          },
+          "unitId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Modbus unit id.",
+            "format": "int32"
+          }
+        },
+        "description": "One Modbus device on the system: what it is, and where it is on the network."
+      },
+      "SiteResponse": {
+        "required": [
+          "id",
+          "name",
+          "address",
+          "latitude",
+          "longitude",
+          "azimuthDegrees",
+          "tiltDegrees",
+          "peakPowerWatts",
+          "inverterCapacityWatts",
+          "lossFactor",
+          "installDate",
+          "inverter",
+          "chargers",
+          "inverterDriver",
+          "chargerDriver"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The system's stable id, or empty on an installation that has not claimed one."
+          },
+          "name": {
+            "type": "string",
+            "description": "What a human calls it; falls back to the id."
+          },
+          "address": {
+            "type": "string",
+            "description": "The postal address, for display. Never parsed, and not necessarily present."
+          },
+          "latitude": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Site latitude in decimal degrees, or null. Always null together with longitude.",
+            "format": "double"
+          },
+          "longitude": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Site longitude in decimal degrees, or null.",
+            "format": "double"
+          },
+          "azimuthDegrees": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The direction the array faces, as a compass bearing from true north in [0, 360): 0 north, 90 east,\n180 south. Normalised, so a site configured as -180 reports 180.",
+            "format": "double"
+          },
+          "tiltDegrees": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Tilt from horizontal: 0 flat, 90 vertical.",
+            "format": "double"
+          },
+          "peakPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Peak DC power of the array (its kWp rating), in W.",
+            "format": "double"
+          },
+          "inverterCapacityWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "AC-side capacity in W, where it clips the array.",
+            "format": "double"
+          },
+          "lossFactor": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "System loss factor in (0, 1] — the fraction of DC yield that reaches the meter.",
+            "format": "double"
+          },
+          "installDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Commissioning date.",
+            "format": "date"
+          },
+          "inverter": {
+            "description": "The inverter every figure in `/status` is read from.",
+            "$ref": "#/components/schemas/SiteDeviceResponse"
+          },
+          "chargers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SiteDeviceResponse"
+            },
+            "description": "The EV chargers. Exactly one is supported today; it is a list because that will not always be true."
+          },
+          "inverterDriver": {
+            "type": "string",
+            "description": "The driver that reads and controls the inverter (`Pv:Inverter:Driver`): `solax` or `huawei`."
+          },
+          "chargerDriver": {
+            "type": "string",
+            "description": "The driver that reads and controls the charger Gleanvolt drives (`Pv:Chargers:0:Driver`): `solax`,\nthe only one so far. Empty when no charger is configured."
+          }
+        },
+        "description": "The installation this API speaks for (issue #111): which system, where it is, what the array does,\nand which boxes it is made of.\n\nThe first question a program should be able to ask — an MCP client above all — is what am I\nconnected to. Every other endpoint answers what it is doing, and a caller that cannot tell\ntwo installations apart cannot safely act on either.\n\nEvery measurement is nullable and null means unset, never zero: a defaulted site is a\nsite in the Atlantic facing north with no capacity, and a client that cannot tell \"not configured\"\nfrom \"zero\" will draw exactly that conclusion."
+      },
+      "SolarDayPlanResponse": {
+        "required": [
+          "remainingPvWh",
+          "shoulderEnergyWh",
+          "plateauEnergyWh",
+          "plateauClaimedByBatteryWh",
+          "expectedHouseWh",
+          "batteryToFullWh",
+          "evBudgetWh",
+          "feasibleEvEnergyWh",
+          "requiredSocFloorPercent",
+          "trajectorySocFloorPercent",
+          "spillWh",
+          "loanHeadroomWh",
+          "shortfallWh",
+          "biasFactor",
+          "deadline",
+          "forecastAsOf",
+          "isUsable",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "remainingPvWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Forecast PV still to come today.",
+            "format": "double"
+          },
+          "shoulderEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Forecast energy in periods too weak for the charger's floor — the house's and the battery's.",
+            "format": "double"
+          },
+          "plateauEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Forecast energy in periods strong enough to run the charger.",
+            "format": "double"
+          },
+          "plateauClaimedByBatteryWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The part of the plateau the home battery has already booked.",
+            "format": "double"
+          },
+          "expectedHouseWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the house is expected to consume over the rest of the day.",
+            "format": "double"
+          },
+          "batteryToFullWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the home battery still needs to reach 100%, charge losses included.",
+            "format": "double"
+          },
+          "evBudgetWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the car may have from the roof today, after the house and the pack.",
+            "format": "double"
+          },
+          "feasibleEvEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Of that budget, what the charger can physically deliver in the time left.",
+            "format": "double"
+          },
+          "requiredSocFloorPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The SOC the home battery must not be drawn below.",
+            "format": "double"
+          },
+          "trajectorySocFloorPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The same floor as a trajectory over the day rather than a single number.",
+            "format": "double"
+          },
+          "spillWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Remaining surplus the home battery has no room for: what is coming less what it can still absorb.\nAt 100% SOC that is all of it, and every watt of it leaves the house unless the car takes it — which\nis what makes the battery loan free, and what opens the loan's thin-surplus rules.",
+            "format": "double"
+          },
+          "loanHeadroomWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "How much the pack may lend right now for free: the room between SOC and the floor, capped by the\nspill. Zero either when SOC sits on the floor or when every remaining watt has a home in the pack.",
+            "format": "double"
+          },
+          "shortfallWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "How far the day falls short of the house plus filling the battery by its deadline.",
+            "format": "double"
+          },
+          "biasFactor": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The learned correction applied to the raw forecast: 1.0 is \"believe it as given\".",
+            "format": "double"
+          },
+          "deadline": {
+            "type": "string",
+            "description": "When the home battery is expected to be full by.",
+            "format": "date-time"
+          },
+          "forecastAsOf": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the forecast behind this plan was fetched, or null when there was none.",
+            "format": "date-time"
+          },
+          "isUsable": {
+            "type": "boolean",
+            "description": "Whether a usable forecast went into it. False means the controller has degraded to plain live-solar\nbehaviour, and the figures here are not being acted on."
+          },
+          "reason": {
+            "type": "string",
+            "description": "A short human-readable summary of what the plan concluded."
+          }
+        },
+        "description": "The forecast-driven day plan: how much of today's remaining sun the car may have, so the home\nbattery still reaches 100% by its evening deadline."
+      },
+      "StartChargingRequest": {
+        "required": [
+          "mode"
+        ],
+        "type": "object",
+        "properties": {
+          "mode": {
+            "description": "Which strategy to run. `solar` follows live surplus once the home battery is full;\n`forecasted` lets today's forecast decide how much of the sun the car may have, takes no\namount, and charges until the car's own limit stops it;\n`fastNoBattery` charges flat out from PV and grid with the home battery held out of it, and\nends itself when the car is full; `targeted` delivers a stated amount by a stated time and\nneeds `target`; `solarGrid` follows the surplus while it clears the configured minimum,\ntops a sub-floor surplus up from the grid, and ends itself when today's forecast has no such sun\nleft. `off` is not a mode to start — use the stop endpoint.",
+            "$ref": "#/components/schemas/ChargeControlMode"
+          },
+          "target": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The target, required for `targeted` and rejected for every other mode. The same shape the\npreview takes, so what was quoted is what is committed: it is set as the active request before the\nmode is selected, and dropped again if the charger refuses.",
+                "$ref": "#/components/schemas/TargetedChargeRequestBody"
+              }
+            ]
+          },
+          "fast": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "How much to deliver before stopping, for `fastNoBattery` only, and rejected for every other\nmode. Optional even there: omitted means `full` — charge until the car itself stops — which is\nhow the mode behaved before it could be given an amount.",
+                "$ref": "#/components/schemas/FastChargeLimitBody"
+              }
+            ]
+          }
+        },
+        "description": "Start controlled charging in one of the modes.\n\nOne call does what one button does: the charger is put into its Fast use-mode and the mode is\nthen selected, so a press works on a charger sitting in Green rather than waiting for somebody to\nhave set the wallbox by hand. A charger that refuses leaves the mode exactly where it was."
+      },
+      "StatusResponse": {
+        "required": [
+          "timestamp",
+          "mode",
+          "state",
+          "dryRun",
+          "holdingControl",
+          "solarPowerWatts",
+          "forecastSolarPowerWatts",
+          "gridPowerWatts",
+          "batteryPowerWatts",
+          "batterySocPercent",
+          "evChargerPowerWatts",
+          "evChargingCurrentAmps",
+          "targetCurrentAmps",
+          "activeCurrentAmps",
+          "surplusWatts",
+          "chargerStatus",
+          "carConnected",
+          "sessionEnergyWh",
+          "loanPowerWatts",
+          "loanedTodayWh",
+          "tomorrowForecastWh",
+          "batteryHold",
+          "dayPlan",
+          "targetedPlan"
+        ],
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "description": "When the poll behind this snapshot completed.",
+            "format": "date-time"
+          },
+          "mode": {
+            "description": "The charge-control mode currently selected.",
+            "$ref": "#/components/schemas/ChargeControlMode"
+          },
+          "state": {
+            "description": "Coarse state of charge control, for display.",
+            "$ref": "#/components/schemas/ChargeControlState"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "Whether charge control is deciding and logging but not writing to the charger."
+          },
+          "holdingControl": {
+            "type": "boolean",
+            "description": "Whether the controller is actually driving the charger right now."
+          },
+          "solarPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the roof is producing.",
+            "format": "double"
+          },
+          "forecastSolarPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the forecast expected the roof to be making at this instant. 0 when no forecast covers it —\nnone fetched, the provider is down, or it is past the horizon — which is not the same as darkness.",
+            "format": "double"
+          },
+          "gridPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Grid meter power: positive is importing, negative is exporting.",
+            "format": "double"
+          },
+          "batteryPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Home battery power: positive is charging, negative is discharging.",
+            "format": "double"
+          },
+          "batterySocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Home battery state of charge. Nothing to do with the car.",
+            "format": "double"
+          },
+          "evChargerPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the EV charger is drawing.",
+            "format": "double"
+          },
+          "evChargingCurrentAmps": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Charging current derived from the charger's power, phase-aware.",
+            "format": "int32"
+          },
+          "targetCurrentAmps": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The current the controller wants, or null when it is not charging.",
+            "format": "int32"
+          },
+          "activeCurrentAmps": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The charger's active setpoint as read back, or null when unknown.",
+            "format": "int32"
+          },
+          "surplusWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The averaged solar surplus being decided on, or null when not solar-charging.",
+            "format": "double"
+          },
+          "chargerStatus": {
+            "description": "The charger's own status.",
+            "$ref": "#/components/schemas/EvChargerStatus"
+          },
+          "carConnected": {
+            "type": "boolean",
+            "description": "Whether a vehicle is plugged in, as the charger sees it."
+          },
+          "sessionEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy delivered to the car in the session now running.",
+            "format": "double"
+          },
+          "loanPowerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "How much of the current charge the home battery is lending.",
+            "format": "double"
+          },
+          "loanedTodayWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Energy lent out of the home battery today.",
+            "format": "double"
+          },
+          "tomorrowForecastWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Tomorrow's forecast production. Informational.",
+            "format": "double"
+          },
+          "batteryHold": {
+            "description": "The battery discharge hold: configured, requested and armed are three different things.",
+            "$ref": "#/components/schemas/BatteryHoldResponse"
+          },
+          "dayPlan": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The forecast-driven day plan, when a mode is using one. Null otherwise.",
+                "$ref": "#/components/schemas/SolarDayPlanResponse"
+              }
+            ]
+          },
+          "targetedPlan": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The energy-by-departure plan, populated only while `Targeted` is the mode driving the charger,\nso a different mode cannot leave a stale target on display.",
+                "$ref": "#/components/schemas/TargetedPlanResponse"
+              }
+            ]
+          },
+          "fastCharge": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The fast charge's limit and how much of it has been delivered, populated only while\n`FastNoBattery` is the mode driving the charger — the same rule. Null also when that mode is\nrunning with no limit, which means the car decides when to stop.",
+                "$ref": "#/components/schemas/FastChargeResponse"
+              }
+            ]
+          },
+          "lowTariff": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "What <i>low tariff only</i> is doing for the mode driving (issue #274): waiting through high tariff\nuntil when, or set with no tariff to wait for. Null while that mode has the option off, or has none.",
+                "$ref": "#/components/schemas/LowTariffStatusResponse"
+              }
+            ]
+          },
+          "untilFull": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "A `forecasted` session running <i>until full</i> (issue #279): since when, and which day of it this\nis. Null while another mode drives, or the option is off.",
+                "$ref": "#/components/schemas/UntilFullStatusResponse"
+              }
+            ]
+          }
+        },
+        "description": "What the controller is doing right now: one poll's worth of the whole site, as the control loop\nlast read it.\n\nEvery power is instantaneous and in watts, signed the way the hardware reports it, and every\nenergy is in watt-hours. timestamp is when the poll behind these figures completed — check\nit before drawing conclusions from anything else here."
+      },
+      "TargetedBlockResponse": {
+        "required": [
+          "start",
+          "end",
+          "source",
+          "powerWatts",
+          "energyWh"
+        ],
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "description": "When the block begins.",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "description": "When it ends.",
+            "format": "date-time"
+          },
+          "source": {
+            "description": "Where the energy comes from: forecast surplus, or the grid.",
+            "$ref": "#/components/schemas/TargetedChargeSource"
+          },
+          "powerWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The power the block is planned at.",
+            "format": "double"
+          },
+          "energyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The energy it is expected to deliver.",
+            "format": "double"
+          }
+        },
+        "description": "One stretch of a targeted plan: when the car charges, on what, and how much it gets."
+      },
+      "TargetedChargePriority": {
+        "enum": [
+          "cheapest",
+          "justInTime"
+        ],
+        "description": "What the owner wants optimised while a TargetedChargeRequest is delivered.\nThe deadline is not one of the choices: both priorities keep the promise, and only the\n<em>shape</em> of the delivery differs.\n\n- `cheapest`: Use as little grid as possible. The charge is paced across the whole window and every watt of sun above that pace is taken for free, so the target is met whenever the sun and the pace happen to land it — usually well before the deadline. The default, and the behaviour of every request made before this choice existed.\n\n- `justInTime`: Reach the target shortly before departure rather than hours before it, so the drive battery does not sit at a high state of charge overnight. Only the last stretch is held back — the energy above TailEnergyWh, which is worked out once at activation from a rest state of charge. Everything below that is delivered exactly as Cheapest would deliver it, on the sun, whenever the sun is there. Delaying the whole charge would forfeit a sunny day to protect the top of the pack and then buy the lot at 04:00. It is allowed to cost money, and the tail is genuinely refused the sun while it waits — taking a bright afternoon would land the car at 100% by teatime, which is the one thing this choice exists to prevent. The preview names that cost in kilowatt-hours before it is chosen."
+      },
+      "TargetedChargeRequestBody": {
+        "required": [
+          "energyWh",
+          "targetSocPercent",
+          "departBy"
+        ],
+        "type": "object",
+        "properties": {
+          "energyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The energy to deliver in Wh, measured at the charger — not the energy that reaches the cells. Omit when\nasking in state of charge.",
+            "format": "double"
+          },
+          "targetSocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The state of charge to reach, 0-100. Converted to energy from what the car last reported. Omit when\nasking in energy.",
+            "format": "double"
+          },
+          "departBy": {
+            "type": "string",
+            "description": "When the energy has to be in the car. An ISO-8601 timestamp with an offset: this is a\nlocal-time promise, and a bare instant is one of the two ways to be an hour wrong.",
+            "format": "date-time"
+          },
+          "priority": {
+            "description": "What to optimise while delivering it. `cheapest` — the default — paces the charge across the\nwhole window and takes every watt of sun above that pace, so the target is usually met well before\nthe deadline. `justInTime` holds the last stretch back so the car reaches its target shortly\nbefore departure instead of sitting full all night; it may cost grid, and the preview says how much.",
+            "$ref": "#/components/schemas/TargetedChargePriority"
+          },
+          "restSocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Where a `justInTime` hold parks the car before the last stretch is released. Defaults to the\ninstallation's configured rest level. Means nothing under `cheapest`.",
+            "format": "double"
+          },
+          "editable": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Limits on <em>how</em> the request may be met (issue #128): when the charger may run, and how much\nmay be bought. Omit for none, which is what every request that says nothing gets.\n\nThis is the field a quoted plan's editable goes back into — edit a bound, send the\nwhole thing back, and quote it again or commit to it. The same body does both, which is what makes\n\"what you quote is what you commit to\" true of the limits as well as of the target.",
+                "$ref": "#/components/schemas/EditablePlanBody"
+              }
+            ]
+          }
+        },
+        "description": "What to put in the car, and by when. The input to both the preview and a targeted start — the same\nshape either way, so what you quote is what you commit to.\n\nSay it either as energy at the charger or as a state of charge for the car, not\nboth. A state of charge needs a vehicle feed with a reading and a configured pack size\n(Ev:Vehicles:0:BatteryCapacityKWh); without them, ask in energy. The conversion happens\nonce, when the request is made, and is never re-derived from a later reading."
+      },
+      "TargetedChargeSource": {
+        "enum": [
+          "solar",
+          "grid"
+        ],
+        "description": "Where the energy in a TargetedChargeBlock is planned to come from.\n\n- `solar`: Forecast surplus the home battery has not already claimed.\n\n- `grid`: Imported energy: whatever the charger's maximum power leaves above the sun of the moment."
+      },
+      "TargetedChargeStrategy": {
+        "enum": [
+          "complete",
+          "solar",
+          "solarPlusGrid",
+          "maximum"
+        ],
+        "description": "What a TargetedChargePlan has concluded it must do to put the requested\nenergy in the car by the requested time. The four cases fall out of one comparison: what is still\nneeded against the physical ceiling of the charger running flat out for every remaining minute.\n\n- `complete`: The target has already been delivered; there is nothing left to do.\n\n- `solar`: Forecast surplus alone covers what is still needed, so no grid import is planned at all. The car takes the earliest chargeable sun and stops when the target is met.\n\n- `solarPlusGrid`: The sun covers part of it and the grid covers the rest, in a block placed over the sunniest slices of the window — so the import runs while the roof is producing and every watt it delivers offsets the meter — or, when the window holds no forecast surplus at all, starting straight away. Because the plan is rebuilt every poll, a day that turns out sunnier than forecast shrinks that block, often to nothing.\n\n- `maximum`: There is not enough time left: even flat out from now until departure the request cannot be met. The charger takes everything, sun and grid together, and the plan reports how much will actually arrive and the departure time that would have covered the request."
+      },
+      "TargetedPlanResponse": {
+        "required": [
+          "strategy",
+          "now",
+          "departBy",
+          "deadline",
+          "requiredEnergyWh",
+          "deliveredEnergyWh",
+          "remainingEnergyWh",
+          "solarEnergyWh",
+          "forecastSurplusWh",
+          "requiredPaceWatts",
+          "gridEnergyWh",
+          "ceilingEnergyWh",
+          "expectedEnergyWh",
+          "shortfallWh",
+          "gridStart",
+          "feasibleDeparture",
+          "socFloorPercent",
+          "batteryToFullWh",
+          "tailEnergyWh",
+          "holdUntil",
+          "forecastAsOf",
+          "isUsable",
+          "reason",
+          "blocks"
+        ],
+        "type": "object",
+        "properties": {
+          "strategy": {
+            "description": "Which case this is: `complete` (delivered), `solar` (forecast surplus covers what is\nleft), `solarPlusGrid` (an import block over the sunniest hours covers the rest), or\n`maximum` (not enough time — see `shortfallWh` and `feasibleDeparture`).",
+            "$ref": "#/components/schemas/TargetedChargeStrategy"
+          },
+          "now": {
+            "type": "string",
+            "description": "The telemetry reading this plan is anchored to.",
+            "format": "date-time"
+          },
+          "departBy": {
+            "type": "string",
+            "description": "The departure that was asked for.",
+            "format": "date-time"
+          },
+          "deadline": {
+            "type": "string",
+            "description": "The finish line the plan works to: the departure less the safety margin.",
+            "format": "date-time"
+          },
+          "requiredEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The energy asked for.",
+            "format": "double"
+          },
+          "deliveredEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the charger has measurably delivered since the request was activated. Zero in a preview.",
+            "format": "double"
+          },
+          "remainingEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What is still needed.",
+            "format": "double"
+          },
+          "solarEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Of what is still needed, the part expected to arrive as a solar block — the car charging on the sun\nalone. Zero does not mean \"no sun\": see `forecastSurplusWh`.",
+            "format": "double"
+          },
+          "forecastSurplusWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "All the surplus the window is forecast to hold, whether or not the car can charge on it unaided.\nA gap between this and `solarEnergyWh` is the weak-sun case: real sun, in half-hours that never\nclear the charger's floor, which is exactly where the import is then placed so the roof pays part of it.",
+            "format": "double"
+          },
+          "requiredPaceWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The average power the charger must hold from now to the deadline to keep the promise. A floor on the\nrate, not a setpoint: sun above it is taken in full, and lowers the pace for every minute after.",
+            "format": "double"
+          },
+          "gridEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The part planned to come from the grid. An upper bound where the import runs over sub-floor surplus.",
+            "format": "double"
+          },
+          "ceilingEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The physical ceiling: the charger at maximum power for every remaining minute.",
+            "format": "double"
+          },
+          "expectedEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What will actually reach the car by the deadline.",
+            "format": "double"
+          },
+          "shortfallWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "How far that falls short of what was asked. Zero unless the strategy is `maximum`.",
+            "format": "double"
+          },
+          "gridStart": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the earliest grid block begins, or null when none is planned.",
+            "format": "date-time"
+          },
+          "feasibleDeparture": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The departure time that would have covered the request, when this one cannot.",
+            "format": "date-time"
+          },
+          "socFloorPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The SOC the home battery must not be drawn below while the car takes solar.",
+            "format": "double"
+          },
+          "batteryToFullWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "What the home battery still needs to reach 100%. Reserved before the car sees any forecast surplus.",
+            "format": "double"
+          },
+          "tailEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The part being held back to land at the deadline under `justInTime`. Zero otherwise.",
+            "format": "double"
+          },
+          "holdUntil": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the held tail is released, or null when nothing is being held.",
+            "format": "date-time"
+          },
+          "forecastAsOf": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the forecast behind this plan was fetched, or null when there was none.",
+            "format": "date-time"
+          },
+          "isUsable": {
+            "type": "boolean",
+            "description": "Whether a usable forecast went into it. False does not invalidate the plan: this mode degrades\ntowards keeping its promise — every solar term goes to zero, the plan becomes grid-only, and the\ntarget is still met. It is a caveat to report, not a failure."
+          },
+          "reason": {
+            "type": "string",
+            "description": "A short human-readable summary of what the plan concluded."
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TargetedBlockResponse"
+            },
+            "description": "The plan as a timeline, chronological by start. Solar and grid blocks may overlap."
+          }
+        },
+        "description": "How the requested energy is going to reach the car by the requested time. Rebuilt from a refreshed\nforecast and the measured delivery on every poll, so a sunnier afternoon than forecast shrinks the\ngrid block — often to nothing."
+      },
+      "TargetedPreviewResponse": {
+        "required": [
+          "request",
+          "plan",
+          "cheapestPlan",
+          "editable"
+        ],
+        "type": "object",
+        "properties": {
+          "request": {
+            "description": "The request as it would be recorded, including the conversions made composing it.",
+            "$ref": "#/components/schemas/TargetedRequestResponse"
+          },
+          "plan": {
+            "description": "The plan itself.",
+            "$ref": "#/components/schemas/TargetedPlanResponse"
+          },
+          "cheapestPlan": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The same energy by the same time under `cheapest`, present only when the request actually holds\na tail back. The difference in `gridEnergyWh` between the two is what just-in-time costs.",
+                "$ref": "#/components/schemas/TargetedPlanResponse"
+              }
+            ]
+          },
+          "editable": {
+            "description": "The parts of this plan you may change and send back, in the shape the start endpoint takes. Round\n-tripping it unchanged is a no-op — you get the plan you were quoted.",
+            "$ref": "#/components/schemas/EditablePlanBody"
+          }
+        },
+        "description": "A plan for a request nobody has made: what would happen if this were started now, built from the\nsame telemetry and the same forecast the poll loop is working from, having written to nothing."
+      },
+      "TargetedRequestResponse": {
+        "required": [
+          "requiredEnergyWh",
+          "departBy",
+          "activatedAt",
+          "targetSocPercent",
+          "vehicleSocPercentAtRequest",
+          "priority",
+          "tailEnergyWh",
+          "restSocPercent"
+        ],
+        "type": "object",
+        "properties": {
+          "requiredEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The energy asked for, at the charger.",
+            "format": "double"
+          },
+          "departBy": {
+            "type": "string",
+            "description": "When it has to be there.",
+            "format": "date-time"
+          },
+          "activatedAt": {
+            "type": "string",
+            "description": "When the request was made. Delivery is metered from here, not from when the car plugged in.",
+            "format": "date-time"
+          },
+          "targetSocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The state of charge asked for, when it was asked that way round.",
+            "format": "double"
+          },
+          "vehicleSocPercentAtRequest": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "What the car was reporting when the conversion was made.",
+            "format": "double"
+          },
+          "priority": {
+            "description": "What is being optimised.",
+            "$ref": "#/components/schemas/TargetedChargePriority"
+          },
+          "tailEnergyWh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "How much of the request is the held tail. Zero under `cheapest`.",
+            "format": "double"
+          },
+          "restSocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The state of charge the tail was measured down to, when one was.",
+            "format": "double"
+          }
+        },
+        "description": "The request the controller is working to, described in the terms it was asked in."
+      },
+      "TariffNowResponse": {
+        "required": [
+          "rate",
+          "pricePerKwh",
+          "until"
+        ],
+        "type": "object",
+        "properties": {
+          "rate": {
+            "description": "Which rate.",
+            "$ref": "#/components/schemas/TariffRate"
+          },
+          "pricePerKwh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "What a grid kWh costs now, or null without prices.",
+            "format": "double"
+          },
+          "until": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the rate next changes, or null when that is beyond what the strategy knows.",
+            "format": "date-time"
+          }
+        },
+        "description": "The rate at one moment."
+      },
+      "TariffProblemResponse": {
+        "required": [
+          "field",
+          "row",
+          "message",
+          "isWarning"
+        ],
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "What it is about: `provider`, `lowPricePerKwh`, `highPricePerKwh`, or a path into a\nstrategy's settings such as `table.weekday`."
+          },
+          "row": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "description": "The row of a list field, counted from zero, or null.",
+            "format": "int32"
+          },
+          "message": {
+            "type": "string",
+            "description": "What is wrong, as Settings says it."
+          },
+          "isWarning": {
+            "type": "boolean",
+            "description": "True when the settings were saved regardless."
+          }
+        },
+        "description": "One thing wrong with tariff settings, where it is, and whether it stopped the save."
+      },
+      "TariffProviderResponse": {
+        "required": [
+          "id",
+          "name",
+          "selected"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "What `provider` in the settings is set to, to select it."
+          },
+          "name": {
+            "type": "string",
+            "description": "What Settings shows."
+          },
+          "selected": {
+            "type": "boolean",
+            "description": "Whether it is the one in use."
+          }
+        },
+        "description": "A tariff strategy this build has."
+      },
+      "TariffRate": {
+        "enum": [
+          "low",
+          "high"
+        ],
+        "description": "Which of a two-rate tariff's prices the grid costs at a given moment (issue #265).\n\n- `low`: The cheap rate: Czech HDO's NT.\n\n- `high`: The expensive rate, VT: every moment the table does not list as low."
+      },
+      "TariffResponse": {
+        "required": [
+          "provider",
+          "providerName",
+          "currency",
+          "unavailable",
+          "now",
+          "windows",
+          "lowPricePerKwh",
+          "highPricePerKwh"
+        ],
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "The selected strategy's id, as GET /tariff/providers lists them."
+          },
+          "providerName": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Its display name, or null when this build does not have it."
+          },
+          "currency": {
+            "type": "string",
+            "description": "What every price here is in: an ISO 4217 code, `Tariff:Currency`."
+          },
+          "unavailable": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Why a selected strategy other than `None` has no timeline, or null."
+          },
+          "now": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The rate at the moment of the request, or null with no timeline.",
+                "$ref": "#/components/schemas/TariffNowResponse"
+              }
+            ]
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TariffWindowResponse"
+            },
+            "description": "Alternating low and high stretches, half-open, tiling the timeline without a gap: for the\n`Table` strategy, from the start of today to the end of tomorrow in local time."
+          },
+          "lowPricePerKwh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The shared low-tariff price, or null when not entered.",
+            "format": "double"
+          },
+          "highPricePerKwh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The shared high-tariff price, or null when not entered.",
+            "format": "double"
+          }
+        },
+        "description": "What grid energy costs when (issue #265): the selected tariff strategy's timeline, the rate now and\nwhen it changes. Prices are per kWh in string TariffResponse.Currency, the one figure here that is not a\nbase unit: it is money, and the installation's currency is configuration, not a conversion.\n\nNo timeline is no restriction, never \"always low\": IReadOnlyList&lt;TariffWindowResponse&gt; TariffResponse.Windows is empty and\nTariffNowResponse? TariffResponse.Now null when the provider is None, and when the selected one cannot answer,\nwhich string? TariffResponse.Unavailable then says."
+      },
+      "TariffSettingsRequest": {
+        "required": [
+          "provider",
+          "lowPricePerKwh",
+          "highPricePerKwh",
+          "settings"
+        ],
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "The strategy to select, by id: `None` for no tariff."
+          },
+          "lowPricePerKwh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The low-tariff price per kWh, or null for none.",
+            "format": "double"
+          },
+          "highPricePerKwh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The high-tariff price per kWh, or null for none.",
+            "format": "double"
+          },
+          "settings": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "description": "Strategies' own settings by key (`table` for `Table`: `weekday` and `weekend`\nlists of `{ \"start\": \"HH:mm\", \"end\": \"HH:mm\" }`, with an end of `24:00` allowed). A key\ngiven replaces that strategy's settings; one left out is kept as it is, so selecting a strategy never\ncosts another one its settings."
+          }
+        },
+        "description": "The tariff settings to store (issue #265), as Settings saves them: the selection, the shared prices,\nand strategies' own settings under their keys. Applied at once, with no restart."
+      },
+      "TariffSettingsResponse": {
+        "required": [
+          "provider",
+          "lowPricePerKwh",
+          "highPricePerKwh",
+          "settings",
+          "warnings"
+        ],
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "The selected strategy's id."
+          },
+          "lowPricePerKwh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The low-tariff price per kWh, or null.",
+            "format": "double"
+          },
+          "highPricePerKwh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The high-tariff price per kWh, or null.",
+            "format": "double"
+          },
+          "settings": {
+            "type": "object",
+            "description": "Every strategy's settings by key, including those of strategies this build lacks."
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TariffProblemResponse"
+            },
+            "description": "What a save went through despite: odd, not unusable. Empty on a read."
+          }
+        },
+        "description": "The tariff settings as stored."
+      },
+      "TariffWindowResponse": {
+        "required": [
+          "start",
+          "end",
+          "rate",
+          "pricePerKwh"
+        ],
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "description": "When it begins.",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "description": "When it ends; the next window's start.",
+            "format": "date-time"
+          },
+          "rate": {
+            "description": "Which rate.",
+            "$ref": "#/components/schemas/TariffRate"
+          },
+          "pricePerKwh": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The price throughout it: the window's own, or its rate's shared one; null without either.",
+            "format": "double"
+          }
+        },
+        "description": "One stretch of a single rate, `[start, end)`."
+      },
+      "TimeWindowBody": {
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "description": "When it begins.",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "description": "When it ends. At or before Start covers nothing.",
+            "format": "date-time"
+          }
+        },
+        "description": "A stretch of time the charger must stay idle in, `[start, end)`."
+      },
+      "UntilFullRequest": {
+        "required": [
+          "untilFull"
+        ],
+        "type": "object",
+        "properties": {
+          "untilFull": {
+            "type": "boolean",
+            "description": "Whether `forecasted` runs until the car is full rather than ending with the day's sun."
+          }
+        },
+        "description": "Change <i>until full</i> for `forecasted` (issue #279): with it on, one session runs over several\ndays, stood down at night, until the car is full, it is unplugged, or the mode is stopped."
+      },
+      "UntilFullResponse": {
+        "required": [
+          "untilFull",
+          "session"
+        ],
+        "type": "object",
+        "properties": {
+          "untilFull": {
+            "type": "boolean",
+            "description": "Whether `forecasted` runs until the car is full."
+          },
+          "session": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The `forecasted` session running with it; null when there is none.",
+                "$ref": "#/components/schemas/UntilFullStatusResponse"
+              }
+            ]
+          }
+        },
+        "description": "<i>Until full</i> as the controller is using it, and the session running with it, if any."
+      },
+      "UntilFullStatusResponse": {
+        "required": [
+          "since",
+          "day"
+        ],
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string",
+            "description": "When the session started. A restart resumes it and keeps this.",
+            "format": "date-time"
+          },
+          "day": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "description": "Which local day of the session this is, from 1 on the day it was started.",
+            "format": "int32"
+          }
+        },
+        "description": "A `forecasted` session running <i>until full</i>: one session over several days."
+      },
+      "VehicleChargeState": {
+        "enum": [
+          "unknown",
+          "idle",
+          "charging",
+          "complete"
+        ],
+        "description": "What the car reports it is doing with its own battery, normalised across sources.\n\nEvery source spells this differently — the VW EU Data Act portal emits\nCHARGE_STATE_CHARGING_HV_BATTERY, volkswagen_connect emits\nnotReadyForCharging, an OBD dongle emits raw CAN values. The mapping to these members is\ndone per car in Home Assistant, so this assembly only ever sees the vocabulary below and a second\nvehicle costs no code here.VehicleChargeState.Unknown is the default deliberately: it is the state of an absent or\nunrecognised field, and every consumer has to handle it anyway.\n\n- `unknown`: Not reported, or a value this vocabulary doesn't cover.\n\n- `idle`: Not charging — whether or not it is plugged in.\n\n- `charging`: Actively taking energy.\n\n- `complete`: Finished: the car reached its own target and stopped of its own accord."
+      },
+      "VehiclePlugState": {
+        "enum": [
+          "unknown",
+          "disconnected",
+          "connected"
+        ],
+        "description": "Whether the car says a cable is in its socket, normalised across sources.\n\nNote this is the car's view, which is not the same fact as the charger's\nEvChargerStatus — the charger knows a cable is connected to it, the car knows a\ncable is connected to itself. On a single-charger site they agree; they are still separate\nreadings from separate devices, and only the charger's is fresh at LAN speed.\n\n- `unknown`: Not reported, or a value this vocabulary doesn't cover.\n\n- `disconnected`: No cable in the car's socket.\n\n- `connected`: A cable is in the car's socket. Says nothing about whether power is flowing."
+      },
+      "VehicleResponse": {
+        "required": [
+          "available",
+          "capturedAt",
+          "ageSeconds",
+          "stale",
+          "socPercent",
+          "rangeMetres",
+          "chargeTimeRemainingSeconds",
+          "chargeState",
+          "plugState",
+          "sourceId",
+          "canTargetSoc"
+        ],
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "Whether any reading has arrived at all. False means every field below is null."
+          },
+          "capturedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the car reported this, as the source stated it.",
+            "format": "date-time"
+          },
+          "ageSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "How old the reading is now. Negative is clamped to zero.",
+            "format": "double"
+          },
+          "stale": {
+            "type": "boolean",
+            "description": "Whether it is older than the configured maximum age — a dead feed, rather than merely an old number."
+          },
+          "socPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The drive battery's state of charge, or null when the car does not report one.",
+            "format": "double"
+          },
+          "rangeMetres": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Electric range in metres, or null when not reported. Display only — nothing plans on it.",
+            "format": "double"
+          },
+          "chargeTimeRemainingSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "What the car says is left of its own charge, in seconds, or null when not reported.",
+            "format": "double"
+          },
+          "chargeState": {
+            "description": "What the car says it is doing.",
+            "$ref": "#/components/schemas/VehicleChargeState"
+          },
+          "plugState": {
+            "description": "Whether the car says a cable is connected. The charger's own view is `carConnected` on the status.",
+            "$ref": "#/components/schemas/VehiclePlugState"
+          },
+          "sourceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Which feed this came from, for diagnostics."
+          },
+          "canTargetSoc": {
+            "type": "boolean",
+            "description": "Whether a targeted charge may be asked for as a state of charge: a reported SOC and a configured\npack size (`Ev:Vehicles:0:BatteryCapacityKWh`). False means ask in energy (Wh)."
+          },
+          "vehicle": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "What the car <b>is</b>, as configured — as opposed to everything above, which is what it last\n<em>said</em>. Null when no car has been described, which is a supported installation.",
+                "$ref": "#/components/schemas/EvResponse"
+              }
+            ]
+          }
+        },
+        "description": "What the car last said about itself, and how long ago it said it.\n\nThe age is part of the reading. A cloud-reported state of charge arrives when the car\nfeels like it — routinely hours late — so a caller handed a bare percentage will treat a\nsix-hour-old number as current. Nothing about how the charger is driven depends on any of this: it\nshapes what can be asked for, never how it is delivered."
+      },
+      "WeatherResponse": {
+        "required": [
+          "observedAt",
+          "temperatureCelsius",
+          "pressurePascals",
+          "humidityPercent",
+          "cloudsPercent",
+          "visibilityMetres",
+          "condition",
+          "conditionDescription"
+        ],
+        "type": "object",
+        "properties": {
+          "observedAt": {
+            "type": "string",
+            "description": "When the provider made the observation.",
+            "format": "date-time"
+          },
+          "temperatureCelsius": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Air temperature.",
+            "format": "double"
+          },
+          "pressurePascals": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Barometric pressure at station level, in Pa.",
+            "format": "double"
+          },
+          "humidityPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Relative humidity.",
+            "format": "double"
+          },
+          "cloudsPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "Cloud cover — the figure that matters to the roof.",
+            "format": "double"
+          },
+          "visibilityMetres": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "Visibility, or null when the provider omitted it.",
+            "format": "double"
+          },
+          "condition": {
+            "type": "string",
+            "description": "The provider's short condition code, e.g. \"Clouds\"."
+          },
+          "conditionDescription": {
+            "type": "string",
+            "description": "The provider's longer description, e.g. \"broken clouds\"."
+          }
+        },
+        "description": "Conditions at the site, from the configured weather provider."
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "type": "http",
+        "description": "One of the keys configured in Api:Keys, presented as 'Authorization: Bearer <key>'. The key's name is what appears in the log and in the recorded charging session as the source of an action.",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKey": [ ]
+    }
+  ],
+  "tags": [
+    {
+      "name": "testhost"
+    },
+    {
+      "name": "Gleanvolt"
+    }
+  ]
+}

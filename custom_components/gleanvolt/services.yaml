@@ -1,0 +1,115 @@
+start_charging:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: gleanvolt
+    mode:
+      required: true
+      selector:
+        select:
+          translation_key: mode
+          options:
+            - solar
+            - forecasted
+            - solar_grid
+            - fast_no_battery
+            - targeted
+    basis:
+      selector:
+        select:
+          translation_key: fast_basis
+          options:
+            - full
+            - energy
+            - soc
+    energy_kwh:
+      selector:
+        number:
+          min: 0.5
+          max: 200
+          step: 0.5
+          unit_of_measurement: kWh
+          mode: box
+    target_soc:
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    depart_by:
+      selector:
+        datetime:
+    priority:
+      selector:
+        select:
+          translation_key: priority
+          options:
+            - cheapest
+            - just_in_time
+    rest_soc:
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    sun_only:
+      default: false
+      selector:
+        boolean:
+    low_tariff_only:
+      default: false
+      selector:
+        boolean:
+
+stop_charging:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: gleanvolt
+
+preview_targeted:
+  fields:
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: gleanvolt
+    energy_kwh:
+      selector:
+        number:
+          min: 0.5
+          max: 200
+          step: 0.5
+          unit_of_measurement: kWh
+          mode: box
+    target_soc:
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    depart_by:
+      selector:
+        datetime:
+    priority:
+      selector:
+        select:
+          translation_key: priority
+          options:
+            - cheapest
+            - just_in_time
+    rest_soc:
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    sun_only:
+      default: false
+      selector:
+        boolean:
+    low_tariff_only:
+      default: false
+      selector:
+        boolean:
