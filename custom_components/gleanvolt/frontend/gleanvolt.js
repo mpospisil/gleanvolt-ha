@@ -1,81 +1,110 @@
-// The Gleanvolt panel and card: the web UI's Charging plan tabs, in Home Assistant.
+// The Gleanvolt panel and card, in two sections.
 //
-// Pick a mode in "Mode to start", and only that mode's controls and figures show, with its Start
-// button. Loaded by the integration itself (frontend.py), so nobody pastes YAML: the sidebar gets a
-// Gleanvolt panel, and the card picker a Gleanvolt card that needs no configuration.
+// 1. PV status: what the roof, the grid and the home battery are doing, and the forecast.
+// 2. Charging: what is charging now. While Gleanvolt drives the charger (any mode but Off), only that
+//    mode's figures and Stop show: the mode can't be changed and nothing can be edited. While it is
+//    Off, "Mode to start" picks a mode, its settings show, and Start starts it, like the web UI's tabs.
 //
-// Entities are found by the integration's own keys (their translation_key), not by entity id, so a
-// renamed entity, an area prefix or a Home Assistant in Czech all work. The rendering is Home
-// Assistant's own entities, conditional and vertical-stack cards.
+// Loaded by the integration itself (panel.py): the sidebar gets a Gleanvolt panel, and the card picker
+// a Gleanvolt card that needs no configuration. Entities are found by the integration's own keys
+// (translation_key), not by entity id, so renames, an area prefix or a Czech Home Assistant don't
+// matter. The rendering is Home Assistant's own entities, conditional and vertical-stack cards.
 
-// LAYOUT-BEGIN (tests/test_frontend.py checks every "domain.key" here is an entity the integration makes)
+// LAYOUT-BEGIN (tests/test_panel.py checks every "domain.key" here is an entity the integration makes)
 const LAYOUT = {
-  "top": [
-    "select.charge_mode",
+  "pv": [
+    "sensor.solar_power",
+    "sensor.forecast_solar_power",
+    "sensor.forecast_today",
+    "sensor.forecast_still_to_come",
+    "sensor.tomorrow_forecast",
+    "sensor.grid_power",
+    "binary_sensor.low_tariff",
+    "sensor.grid_price",
+    "sensor.battery_soc",
+    "sensor.battery_power",
+    "switch.battery_discharge_hold"
+  ],
+  "charging": [
+    "sensor.charge_mode",
     "sensor.control_state",
     "sensor.charger_status",
     "binary_sensor.car_connected",
-    "switch.battery_discharge_hold",
-    "button.stop_charging"
+    "sensor.car_soc",
+    "sensor.ev_charging_power",
+    "sensor.session_energy"
   ],
+  "mode": "sensor.charge_mode",
   "picker": "select.mode_to_start",
   "start": "button.start_mode",
+  "stop": "button.stop_charging",
   "modes": {
-    "solar": [
-      "sensor.solar_surplus",
-      "sensor.battery_soc",
-      "sensor.ev_charging_power",
-      "sensor.target_charging_current"
-    ],
-    "forecasted": [
-      "switch.forecasted_until_full",
-      { "running": true },
-      "sensor.plan_state",
-      "sensor.ev_energy_budget",
-      "sensor.required_soc_floor",
-      "sensor.projected_shortfall",
-      "sensor.forecast_remaining_today",
-      "sensor.tomorrow_forecast",
-      "sensor.battery_loaned_today"
-    ],
-    "solar_grid": [
-      "switch.solar_grid_low_tariff_only",
-      "sensor.solar_surplus",
-      "sensor.grid_power",
-      "sensor.target_charging_current"
-    ],
-    "fast_no_battery": [
-      "select.fast_basis",
-      { "entity": "number.fast_energy", "when": ["select.fast_basis", "energy"] },
-      { "entity": "number.fast_target_soc", "when": ["select.fast_basis", "soc"] },
-      "datetime.fast_departure",
-      "switch.fast_low_tariff_only",
-      "sensor.car_soc",
-      { "running": true },
-      "sensor.ev_charging_power",
-      "sensor.fast_delivered",
-      "sensor.fast_target",
-      "sensor.fast_start"
-    ],
-    "targeted": [
-      "sensor.car_soc",
-      "sensor.car_range",
-      "select.target_basis",
-      { "entity": "number.target_energy", "when": ["select.target_basis", "energy"] },
-      { "entity": "number.target_soc", "when": ["select.target_basis", "soc"] },
-      "datetime.departure",
-      "select.charge_priority",
-      { "entity": "number.target_rest_soc", "when": ["select.charge_priority", "just_in_time"] },
-      "switch.target_sun_only",
-      "switch.target_low_tariff_only",
-      { "running": true },
-      "sensor.target_plan_state",
-      "sensor.target_solar_energy",
-      "sensor.target_grid_energy",
-      "sensor.target_expected",
-      "sensor.target_shortfall",
-      "sensor.charging_from"
-    ]
+    "solar": {
+      "setup": [],
+      "running": [
+        "sensor.solar_surplus",
+        "sensor.target_charging_current"
+      ]
+    },
+    "forecasted": {
+      "setup": [
+        "switch.forecasted_until_full"
+      ],
+      "running": [
+        "sensor.plan_state",
+        "sensor.ev_energy_budget",
+        "sensor.required_soc_floor",
+        "sensor.projected_shortfall",
+        "sensor.forecast_remaining_today",
+        "sensor.battery_loan_power",
+        "sensor.battery_loaned_today"
+      ]
+    },
+    "solar_grid": {
+      "setup": [
+        "switch.solar_grid_low_tariff_only"
+      ],
+      "running": [
+        "sensor.solar_surplus",
+        "sensor.target_charging_current"
+      ]
+    },
+    "fast_no_battery": {
+      "setup": [
+        "select.fast_basis",
+        { "entity": "number.fast_energy", "when": ["select.fast_basis", "energy"] },
+        { "entity": "number.fast_target_soc", "when": ["select.fast_basis", "soc"] },
+        "datetime.fast_departure",
+        "switch.fast_low_tariff_only"
+      ],
+      "running": [
+        "sensor.fast_delivered",
+        "sensor.fast_target",
+        "sensor.fast_start"
+      ]
+    },
+    "targeted": {
+      "setup": [
+        "sensor.car_range",
+        "select.target_basis",
+        { "entity": "number.target_energy", "when": ["select.target_basis", "energy"] },
+        { "entity": "number.target_soc", "when": ["select.target_basis", "soc"] },
+        "datetime.departure",
+        "select.charge_priority",
+        { "entity": "number.target_rest_soc", "when": ["select.charge_priority", "just_in_time"] },
+        "switch.target_sun_only",
+        "switch.target_low_tariff_only"
+      ],
+      "running": [
+        "sensor.target_plan_state",
+        "sensor.target_solar_energy",
+        "sensor.target_grid_energy",
+        "sensor.target_expected",
+        "sensor.target_shortfall",
+        "sensor.charging_from",
+        "sensor.target_hold_until"
+      ]
+    }
   }
 };
 // LAYOUT-END
@@ -91,16 +120,22 @@ const MODE_NAMES = {
 
 const TEXT = {
   en: {
-    running: (mode) => `While ${mode} runs`,
+    pv: "PV status",
+    charging: "Charging",
+    running: (mode) => `${mode} is charging`,
+    setup: (mode) => `${mode}: settings`,
     start: (mode) => `Start ${mode}`,
     none: "No Gleanvolt device. Add the Gleanvolt integration under Settings → Devices & services.",
-    description: "Charge mode, and the controls of the mode to start, like the web UI's tabs.",
+    description: "PV status, and charging: the running mode, or the mode to start with its settings.",
   },
   cs: {
-    running: (mode) => `Když běží ${mode}`,
+    pv: "Stav FVE",
+    charging: "Nabíjení",
+    running: (mode) => `Nabíjí ${mode}`,
+    setup: (mode) => `${mode}: nastavení`,
     start: (mode) => `Spustit ${mode}`,
     none: "Žádné zařízení Gleanvolt. Přidejte integraci Gleanvolt v Nastavení → Zařízení a služby.",
-    description: "Režim nabíjení a ovládání režimu ke spuštění, jako záložky webového rozhraní.",
+    description: "Stav FVE a nabíjení: běžící režim, nebo režim ke spuštění s jeho nastavením.",
   },
 };
 
@@ -133,6 +168,14 @@ function entityMap(hass, deviceId) {
   return map;
 }
 
+/** The entity's name without the device's in front: "Grid power", not "Jinacovice Grid power". */
+function shortName(hass, entityId, device) {
+  const state = hass.states[entityId];
+  const name = state && state.attributes.friendly_name;
+  if (!name) return undefined;
+  return name.startsWith(`${device} `) ? name.slice(device.length + 1) : name;
+}
+
 /**
  * Home Assistant's card factory. It lives in the dashboards' code, which a page loads only once a
  * dashboard has been opened, so a panel opened straight after a refresh has to load it first: the
@@ -155,15 +198,16 @@ async function cardHelpers() {
 }
 
 /** The card configuration for one installation, built from Home Assistant's own cards. */
-function buildConfig(hass, deviceId) {
+function buildConfig(hass, deviceId, showName) {
   const ids = entityMap(hass, deviceId);
   const t = text(hass);
-  const row = (key) => (ids[key] ? { entity: ids[key] } : null);
-  const rows = (items, mode) =>
+  const device = deviceName(hass, deviceId);
+  const row = (key, name) =>
+    ids[key] ? { entity: ids[key], name: name || shortName(hass, ids[key], device) } : null;
+  const rows = (items) =>
     items
       .map((item) => {
         if (typeof item === "string") return row(item);
-        if (item.running) return { type: "section", label: t.running(MODE_NAMES[mode]) };
         const inner = row(item.entity);
         const [whenKey, state] = item.when;
         return inner && ids[whenKey]
@@ -171,22 +215,45 @@ function buildConfig(hass, deviceId) {
           : null;
       })
       .filter(Boolean);
+  const titled = (title) => (showName ? `${device} · ${title}` : title);
+  const whenMode = (state) => [{ condition: "state", entity: ids[LAYOUT.mode], state }];
 
   const cards = [
-    { type: "entities", title: deviceName(hass, deviceId), state_color: true, entities: rows(LAYOUT.top) },
+    { type: "entities", title: titled(t.pv), state_color: true, entities: rows(LAYOUT.pv) },
+    { type: "entities", title: titled(t.charging), state_color: true, entities: rows(LAYOUT.charging) },
   ];
-  const picker = ids[LAYOUT.picker];
-  const start = ids[LAYOUT.start];
-  if (picker) {
-    cards.push({ type: "entities", entities: [{ entity: picker }] });
-    for (const [mode, items] of Object.entries(LAYOUT.modes)) {
-      const entities = rows(items, mode);
-      if (start) entities.push({ entity: start, name: t.start(MODE_NAMES[mode]) });
+
+  if (ids[LAYOUT.mode]) {
+    // Gleanvolt is charging: that mode's figures, and Stop. Nothing to change or edit.
+    for (const [mode, parts] of Object.entries(LAYOUT.modes)) {
+      const entities = rows(parts.running);
+      const stop = row(LAYOUT.stop);
+      if (stop) entities.push(stop);
       cards.push({
         type: "conditional",
-        conditions: [{ condition: "state", entity: picker, state: mode }],
-        card: { type: "entities", title: MODE_NAMES[mode], state_color: true, entities },
+        conditions: whenMode(mode),
+        card: { type: "entities", title: t.running(MODE_NAMES[mode]), state_color: true, entities },
       });
+    }
+
+    // Off: pick a mode, set what it needs, start it.
+    const picker = ids[LAYOUT.picker];
+    if (picker) {
+      cards.push({
+        type: "conditional",
+        conditions: whenMode("off"),
+        card: { type: "entities", entities: [row(LAYOUT.picker)] },
+      });
+      for (const [mode, parts] of Object.entries(LAYOUT.modes)) {
+        const entities = rows(parts.setup);
+        const start = row(LAYOUT.start, t.start(MODE_NAMES[mode]));
+        if (start) entities.push(start);
+        cards.push({
+          type: "conditional",
+          conditions: [...whenMode("off"), { condition: "state", entity: picker, state: mode }],
+          card: { type: "entities", title: t.setup(MODE_NAMES[mode]), state_color: true, entities },
+        });
+      }
     }
   }
   return { type: "vertical-stack", cards };
@@ -218,10 +285,11 @@ class GleanvoltCard extends HTMLElement {
       }
       return;
     }
-    const config = buildConfig(hass, deviceId);
+    const config = buildConfig(hass, deviceId, Boolean(this._config && this._config.show_name));
     const signature = JSON.stringify(config);
     if (signature !== this._signature && !this._building) {
-      // Rebuilt only when the entities or the language change; otherwise just fed the new state.
+      // Rebuilt only when the entities, their names or the language change; otherwise just fed the
+      // new state, and the conditional cards switch between charging and the mode to start.
       this._building = true;
       try {
         const helpers = await cardHelpers();
@@ -253,7 +321,7 @@ class GleanvoltCard extends HTMLElement {
   }
 
   getCardSize() {
-    return 10;
+    return 14;
   }
 
   static getStubConfig() {
@@ -261,7 +329,7 @@ class GleanvoltCard extends HTMLElement {
   }
 }
 
-/** The sidebar panel: one Gleanvolt card per installation. */
+/** The sidebar panel: one Gleanvolt card per installation, named when there is more than one. */
 class GleanvoltPanel extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
@@ -302,6 +370,7 @@ class GleanvoltPanel extends HTMLElement {
 
     const devices = gleanvoltDevices(hass);
     const wanted = devices.length ? devices : [null];
+    const showName = devices.length > 1;
     for (const [id, card] of this._byDevice) {
       if (!wanted.includes(id)) {
         card.remove();
@@ -310,9 +379,11 @@ class GleanvoltPanel extends HTMLElement {
     }
     for (const id of wanted) {
       let card = this._byDevice.get(id);
-      if (!card) {
+      if (!card || card._showName !== showName) {
+        if (card) card.remove();
         card = document.createElement("gleanvolt-card");
-        card.setConfig(id ? { device_id: id } : {});
+        card.setConfig(id ? { device_id: id, show_name: showName } : {});
+        card._showName = showName;
         this._cards.appendChild(card);
         this._byDevice.set(id, card);
       }
