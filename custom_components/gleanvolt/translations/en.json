@@ -279,6 +279,16 @@
           "targeted": "Targeted"
         }
       },
+      "mode_to_start": {
+        "name": "Mode to start",
+        "state": {
+          "solar": "Solar",
+          "forecasted": "Forecasted",
+          "solar_grid": "SolarGrid",
+          "fast_no_battery": "FastNoBattery",
+          "targeted": "Targeted"
+        }
+      },
       "fast_basis": {
         "name": "Fast basis",
         "state": {
@@ -348,6 +358,9 @@
       }
     },
     "button": {
+      "start_mode": {
+        "name": "Start"
+      },
       "stop_charging": {
         "name": "Stop charging"
       }

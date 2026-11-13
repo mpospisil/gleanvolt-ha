@@ -231,3 +231,45 @@ async def test_held_entities_are_not_sent_until_a_start(
     await _select(hass, "select.home_roof_target_basis", "soc")
     assert len(aioclient_mock.mock_calls) == before
     assert hass.states.get("number.home_roof_fast_energy").state == "10.0"
+
+
+async def test_mode_to_start_then_start(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Like a web UI tab: picking the mode sends nothing; Start starts it with that tab's values."""
+    before = len(aioclient_mock.mock_calls)
+    await _select(hass, "select.home_roof_mode_to_start", "fast_no_battery")
+    await _select(hass, "select.home_roof_fast_basis", "energy")
+    await hass.services.async_call(
+        NUMBER,
+        SERVICE_SET_VALUE,
+        {ATTR_ENTITY_ID: "number.home_roof_fast_energy", "value": 12},
+        blocking=True,
+    )
+    assert len(aioclient_mock.mock_calls) == before
+    assert hass.states.get(MODE).state == "off"
+
+    aioclient_mock.post(
+        f"{BASE}/charging/start", json=action(status={**STATUS, "mode": "fastNoBattery"})
+    )
+    await hass.services.async_call(
+        BUTTON, SERVICE_PRESS, {ATTR_ENTITY_ID: "button.home_roof_start"}, blocking=True
+    )
+    assert _sent(aioclient_mock, "POST", "/charging/start") == [
+        {"mode": "fastNoBattery", "fast": {"basis": "energy", "energyWh": 12000}}
+    ]
+    assert hass.states.get(MODE).state == "fast_no_battery"
+
+
+async def test_start_refused_reaches_the_user(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry, aioclient_mock: AiohttpClientMocker
+) -> None:
+    await _select(hass, "select.home_roof_mode_to_start", "targeted")
+    aioclient_mock.post(
+        f"{BASE}/charging/start", status=400, json={"detail": "Set a departure first."}
+    )
+    with pytest.raises(HomeAssistantError) as raised:
+        await hass.services.async_call(
+            BUTTON, SERVICE_PRESS, {ATTR_ENTITY_ID: "button.home_roof_start"}, blocking=True
+        )
+    assert raised.value.translation_placeholders == {"message": "Set a departure first."}

@@ -52,24 +52,38 @@ UI. Each entity's meaning is described in Gleanvolt's
   (*Low tariff*, *Tariff change*, *Grid price*).
 - **The running plan.** The *Forecasted* day plan, the *Targeted* plan and *Fast* progress. Each is
   `unknown` while its mode isn't running.
-- **Controls that act at once.** **Charge mode** (select), **Stop charging** (button), **Battery
+- **Controls that act at once.** **Charge mode** (select), **Start** and **Stop charging** (buttons), **Battery
   discharge hold**, **Fast low tariff only**, **SolarGrid low tariff only** and **Forecasted until
   full** (switches).
-- **Parameters for the next start.** *Fast basis*, *Fast energy*, *Fast target SOC*, *Fast departure*,
+- **Parameters for the next start.** *Mode to start*, *Fast basis*, *Fast energy*, *Fast target SOC*, *Fast departure*,
   *Target basis*, *Target energy*, *Target SOC*, *Departure*, *Charge priority*, *Target rest SOC*,
   *Target sun only* and *Target low tariff only*.
 
-### Picking a mode
+### Starting a mode, like the web UI's tabs
 
-**Charge mode** always shows the mode Gleanvolt is in. Picking an option starts that mode with the
-parameters held in the entities above. Picking **Off** stops charging. If Gleanvolt refuses, for
-example *Targeted* with no departure set, Home Assistant shows its reason, nothing starts, and the
-select goes back to the real mode.
+The web UI's **Charging plan** has a tab per mode: you open one, set what it needs, and press **Start**.
+The integration has the same three parts:
 
-The held parameters live in Home Assistant, not in Gleanvolt. They survive a Home Assistant restart
-and are sent only when a mode is started. The controller still boots in `Off` and starts charging only
-when asked. While a *Targeted* or *Fast* charge runs, the plan sensors show the running request,
-wherever it was started. The held entities show the next one.
+- **Mode to start** is the tab: which mode the parameters and the button are for. It is kept in Home
+  Assistant and starts nothing by itself.
+- The **parameters** for Fast and Targeted (*Fast basis*, *Fast energy*, *Departure*, …) are also kept in
+  Home Assistant. They survive a Home Assistant restart and are sent only at a start.
+- **Start** starts the mode in *Mode to start* with its parameters.
+
+**Charge mode** always shows the mode Gleanvolt is actually in. Picking a mode there starts it straight
+away with the same held parameters, and **Off** stops charging, as does **Stop charging**. If Gleanvolt
+refuses, for example *Targeted* with no departure set, Home Assistant shows its reason and nothing
+starts.
+
+The device page lists every entity at once, because Home Assistant has no way to show only some.
+[`dashboard/gleanvolt-card.yaml`](dashboard/gleanvolt-card.yaml) is a card that does: pick a mode in
+*Mode to start*, and only that mode's controls and figures appear, the way a tab does. Replace
+`gleanvolt_` in it with your device's entity prefix (for a device named *Home roof*:
+`sed 's/\.gleanvolt_/.home_roof_/g'`), then in a dashboard **Edit → Add card → Manual** and paste.
+
+Gleanvolt still boots in `Off` and starts charging only when asked. While a *Targeted* or *Fast*
+charge runs, the plan sensors show the running request, wherever it was started. The held entities
+show the next one. A plan's figures are `unknown` while its mode isn't running.
 
 **Fast departure** can't be emptied, because Home Assistant's date-time entity has no empty value. A
 departure already in the past means *charge now*.

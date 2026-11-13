@@ -33,6 +33,7 @@
     },
     "select": {
       "charge_mode": { "default": "mdi:ev-station" },
+      "mode_to_start": { "default": "mdi:tab" },
       "fast_basis": { "default": "mdi:target" },
       "target_basis": { "default": "mdi:target" },
       "charge_priority": { "default": "mdi:sort-clock-ascending-outline" }
@@ -57,6 +58,7 @@
       "target_low_tariff_only": { "default": "mdi:cash-clock" }
     },
     "button": {
+      "start_mode": { "default": "mdi:play-circle-outline" },
       "stop_charging": { "default": "mdi:stop-circle-outline" }
     }
   },

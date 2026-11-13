@@ -1,0 +1,156 @@
+# A Gleanvolt card that works like the web UI's Charging plan tabs: pick a mode in "Mode to start",
+# see only that mode's controls and figures, set them, then press Start.
+#
+# Entity ids start with your device's name: replace every "gleanvolt_" below with yours, e.g.
+#   sed 's/\.gleanvolt_/.home_roof_/g' gleanvolt-card.yaml
+# Home Assistant makes entity ids from the names in its language when the device is added, so on a
+# Home Assistant set to Czech they differ: Settings -> Devices -> the Gleanvolt device lists them.
+# Then: a dashboard -> Edit -> Add card -> Manual, and paste.
+type: vertical-stack
+cards:
+- type: entities
+  title: Gleanvolt
+  state_color: true
+  entities:
+  - entity: select.gleanvolt_charge_mode
+  - entity: sensor.gleanvolt_control_state
+  - entity: sensor.gleanvolt_charger_status
+  - entity: binary_sensor.gleanvolt_car_connected
+  - entity: switch.gleanvolt_battery_discharge_hold
+  - entity: button.gleanvolt_stop_charging
+- type: entities
+  entities:
+  - entity: select.gleanvolt_mode_to_start
+- type: conditional
+  conditions:
+  - condition: state
+    entity: select.gleanvolt_mode_to_start
+    state: solar
+  card:
+    type: entities
+    title: Solar
+    state_color: true
+    entities:
+    - entity: sensor.gleanvolt_solar_surplus
+    - entity: sensor.gleanvolt_battery_soc
+    - entity: sensor.gleanvolt_ev_charging_power
+    - entity: sensor.gleanvolt_target_charging_current
+    - entity: button.gleanvolt_start
+      name: Start Solar
+- type: conditional
+  conditions:
+  - condition: state
+    entity: select.gleanvolt_mode_to_start
+    state: forecasted
+  card:
+    type: entities
+    title: Forecasted
+    state_color: true
+    entities:
+    - entity: switch.gleanvolt_forecasted_until_full
+    - type: section
+      label: While Forecasted runs
+    - entity: sensor.gleanvolt_plan_state
+    - entity: sensor.gleanvolt_ev_energy_budget
+    - entity: sensor.gleanvolt_required_soc_floor
+    - entity: sensor.gleanvolt_projected_shortfall
+    - entity: sensor.gleanvolt_forecast_remaining_today
+    - entity: sensor.gleanvolt_tomorrow_forecast
+    - entity: sensor.gleanvolt_battery_loaned_today
+    - entity: button.gleanvolt_start
+      name: Start Forecasted
+- type: conditional
+  conditions:
+  - condition: state
+    entity: select.gleanvolt_mode_to_start
+    state: solar_grid
+  card:
+    type: entities
+    title: SolarGrid
+    state_color: true
+    entities:
+    - entity: switch.gleanvolt_solargrid_low_tariff_only
+    - entity: sensor.gleanvolt_solar_surplus
+    - entity: sensor.gleanvolt_grid_power
+    - entity: sensor.gleanvolt_target_charging_current
+    - entity: button.gleanvolt_start
+      name: Start SolarGrid
+- type: conditional
+  conditions:
+  - condition: state
+    entity: select.gleanvolt_mode_to_start
+    state: fast_no_battery
+  card:
+    type: entities
+    title: FastNoBattery
+    state_color: true
+    entities:
+    - entity: select.gleanvolt_fast_basis
+    - type: conditional
+      conditions:
+      - entity: select.gleanvolt_fast_basis
+        state: energy
+      row:
+        entity: number.gleanvolt_fast_energy
+    - type: conditional
+      conditions:
+      - entity: select.gleanvolt_fast_basis
+        state: soc
+      row:
+        entity: number.gleanvolt_fast_target_soc
+    - entity: datetime.gleanvolt_fast_departure
+    - entity: switch.gleanvolt_fast_low_tariff_only
+    - entity: sensor.gleanvolt_car_soc
+    - type: section
+      label: While FastNoBattery runs
+    - entity: sensor.gleanvolt_ev_charging_power
+    - entity: sensor.gleanvolt_fast_delivered
+    - entity: sensor.gleanvolt_fast_target
+    - entity: sensor.gleanvolt_fast_start
+    - entity: button.gleanvolt_start
+      name: Start FastNoBattery
+- type: conditional
+  conditions:
+  - condition: state
+    entity: select.gleanvolt_mode_to_start
+    state: targeted
+  card:
+    type: entities
+    title: Targeted
+    state_color: true
+    entities:
+    - entity: sensor.gleanvolt_car_soc
+    - entity: sensor.gleanvolt_car_range
+    - entity: select.gleanvolt_target_basis
+    - type: conditional
+      conditions:
+      - entity: select.gleanvolt_target_basis
+        state: energy
+      row:
+        entity: number.gleanvolt_target_energy
+    - type: conditional
+      conditions:
+      - entity: select.gleanvolt_target_basis
+        state: soc
+      row:
+        entity: number.gleanvolt_target_soc
+    - entity: datetime.gleanvolt_departure
+    - entity: select.gleanvolt_charge_priority
+    - type: conditional
+      conditions:
+      - entity: select.gleanvolt_charge_priority
+        state: just_in_time
+      row:
+        entity: number.gleanvolt_target_rest_soc
+    - entity: switch.gleanvolt_target_sun_only
+    - entity: switch.gleanvolt_target_low_tariff_only
+    - type: section
+      label: While Targeted runs
+    - entity: sensor.gleanvolt_target_plan_state
+    - entity: sensor.gleanvolt_target_solar_energy
+    - entity: sensor.gleanvolt_target_grid_energy
+    - entity: sensor.gleanvolt_target_expected
+    - entity: sensor.gleanvolt_target_shortfall
+    - entity: sensor.gleanvolt_charging_from
+    - entity: button.gleanvolt_start
+      name: Start Targeted

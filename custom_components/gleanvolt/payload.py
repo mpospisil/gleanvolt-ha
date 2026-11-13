@@ -19,6 +19,7 @@ from .const import MODES_REVERSED, PRIORITIES_REVERSED
 class Drafts:
     """The parameters held in Home Assistant for the next start. Not a controller setting."""
 
+    next_mode: str = "solar"
     fast_basis: str = "full"
     fast_energy_kwh: float | None = None
     fast_target_soc: float | None = None

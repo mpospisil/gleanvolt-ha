@@ -25,6 +25,13 @@ async def async_setup_entry(
     async_add_entities(
         [
             ChargeModeSelect(runtime),
+            # The web UI's tabs: which mode the held parameters and the Start button are for.
+            HeldSelect(
+                runtime,
+                "mode_to_start",
+                "next_mode",
+                [mode for mode in MODES.values() if mode != "off"],
+            ),
             HeldSelect(runtime, "fast_basis", "fast_basis", list(FAST_BASES)),
             HeldSelect(runtime, "target_basis", "target_basis", list(TARGET_BASES)),
             HeldSelect(runtime, "charge_priority", "priority", list(PRIORITIES.values())),

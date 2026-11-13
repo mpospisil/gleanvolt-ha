@@ -135,3 +135,21 @@ async def test_plan_figures_only_while_their_mode_drives(
     coordinator.async_set_updated_data({**STATUS, "mode": "solar", "fastCharge": fast})
     await hass.async_block_till_done()
     assert hass.states.get("sensor.home_roof_fast_delivered").state == "unknown"
+
+
+async def test_dashboard_card_names_only_real_entities(
+    hass: HomeAssistant, loaded_entry: MockConfigEntry
+) -> None:
+    """dashboard/gleanvolt-card.yaml, with the device slug swapped in, names entities that exist."""
+    from pathlib import Path
+    import re
+
+    card = (Path(__file__).parent.parent / "dashboard" / "gleanvolt-card.yaml").read_text()
+    named = set(re.findall(r"\b(\w+)\.gleanvolt_(\w+)", card))
+    assert len(named) > 30
+    missing = [
+        f"{domain}.home_roof_{key}"
+        for domain, key in sorted(named)
+        if hass.states.get(f"{domain}.home_roof_{key}") is None
+    ]
+    assert missing == []
