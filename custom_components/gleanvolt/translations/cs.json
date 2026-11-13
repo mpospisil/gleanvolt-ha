@@ -1,0 +1,505 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Připojit Gleanvolt",
+        "description": "Gleanvolt {minimum} nebo novější se zapnutým HTTP API (Nastavení → Instalace → Přístup k API). Vytvořte tam klíč s názvem `home-assistant`, aby protokol a záznamy nabíjení uváděly Home Assistant jako původce akcí.",
+        "data": {
+          "host": "Hostitel",
+          "port": "Port",
+          "api_key": "Klíč API"
+        },
+        "data_description": {
+          "host": "Počítač, na kterém Gleanvolt běží, například gleanvolt.local nebo 192.168.1.20.",
+          "port": "Port webového rozhraní, 8090, pokud jste ho neměnili.",
+          "api_key": "Tajná hodnota klíče z Nastavení → Instalace → Přístup k API."
+        }
+      },
+      "zeroconf_confirm": {
+        "title": "Nalezen Gleanvolt",
+        "description": "{name} byl nalezen na adrese {host}:{port}. Zadejte klíč API z jeho Nastavení → Instalace → Přístup k API (Gleanvolt {minimum} nebo novější).",
+        "data": {
+          "api_key": "Klíč API"
+        },
+        "data_description": {
+          "api_key": "Tajná hodnota klíče z Nastavení → Instalace → Přístup k API."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Nový klíč API",
+        "description": "{name} odmítl klíč API. Zadejte platný klíč z Nastavení → Instalace → Přístup k API.",
+        "data": {
+          "api_key": "Klíč API"
+        },
+        "data_description": {
+          "api_key": "Tajná hodnota klíče z Nastavení → Instalace → Přístup k API."
+        }
+      },
+      "reconfigure": {
+        "title": "Změnit adresu",
+        "description": "Kde je {name} nyní dostupný. Klíč API zůstává.",
+        "data": {
+          "host": "Hostitel",
+          "port": "Port"
+        },
+        "data_description": {
+          "host": "Počítač, na kterém Gleanvolt běží, například gleanvolt.local nebo 192.168.1.20.",
+          "port": "Port webového rozhraní, 8090, pokud jste ho neměnili."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Na této adrese nic neodpovídá. Zkontrolujte hostitele a port a že Gleanvolt běží.",
+      "invalid_auth": "Klíč API byl odmítnut.",
+      "api_disabled": "HTTP API je vypnuté. Zapněte ho v Nastavení → Instalace → Přístup k API a pak použijte Restart v Nastavení → Stav.",
+      "unsupported_version": "Toto je Gleanvolt {version}; integrace potřebuje {minimum} nebo novější. Nejdřív Gleanvolt aktualizujte.",
+      "unknown": "Neočekávaná chyba. Podrobnosti jsou v protokolu Home Assistantu."
+    },
+    "abort": {
+      "already_configured": "Tato instalace Gleanvoltu už je nastavená.",
+      "already_in_progress": "Tato instalace Gleanvoltu už je nastavená.",
+      "reauth_successful": "Nový klíč funguje.",
+      "reconfigure_successful": "Adresa je změněná.",
+      "wrong_device": "Na této adrese odpovídá jiná instalace Gleanvoltu."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Dotazování",
+        "description": "Jak často se čte aktuální stav. Auto, tarif a volby se čtou každou minutu tak jako tak.",
+        "data": {
+          "scan_interval": "Interval čtení stavu"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "charge_mode": {
+        "name": "Režim nabíjení",
+        "state": {
+          "off": "Off",
+          "solar": "Solar",
+          "forecasted": "Forecasted",
+          "solar_grid": "SolarGrid",
+          "fast_no_battery": "FastNoBattery",
+          "targeted": "Targeted"
+        }
+      },
+      "control_state": {
+        "name": "Stav řízení",
+        "state": {
+          "disabled": "Vypnuto",
+          "idle": "Nečinné",
+          "charging": "Nabíjí",
+          "paused": "Pozastaveno"
+        }
+      },
+      "charger_status": {
+        "name": "Stav nabíječky",
+        "state": {
+          "available": "Available",
+          "preparing": "Preparing",
+          "charging": "Charging",
+          "finishing": "Finishing",
+          "faulted": "Faulted",
+          "unavailable": "Unavailable",
+          "reserved": "Reserved",
+          "suspended_ev": "SuspendedEv",
+          "suspended_evse": "SuspendedEvse",
+          "update": "Update",
+          "card_activation": "CardActivation",
+          "start_delay": "StartDelay",
+          "charge_paused": "ChargePaused",
+          "stopping": "Stopping",
+          "unknown": "Unknown"
+        }
+      },
+      "solar_power": {
+        "name": "Solární výkon"
+      },
+      "forecast_solar_power": {
+        "name": "Předpověď solárního výkonu"
+      },
+      "solar_surplus": {
+        "name": "Solární přebytek"
+      },
+      "grid_power": {
+        "name": "Výkon sítě"
+      },
+      "battery_power": {
+        "name": "Výkon baterie"
+      },
+      "battery_soc": {
+        "name": "SOC baterie"
+      },
+      "ev_charging_power": {
+        "name": "Nabíjecí výkon auta"
+      },
+      "ev_charging_current": {
+        "name": "Nabíjecí proud auta"
+      },
+      "target_charging_current": {
+        "name": "Cílový proud"
+      },
+      "active_charging_current": {
+        "name": "Aktivní proud"
+      },
+      "session_energy": {
+        "name": "Energie nabíjení"
+      },
+      "battery_loan_power": {
+        "name": "Výpůjčka z baterie"
+      },
+      "battery_loaned_today": {
+        "name": "Dnes půjčeno z baterie"
+      },
+      "tomorrow_forecast": {
+        "name": "Předpověď na zítra"
+      },
+      "plan_state": {
+        "name": "Stav plánu"
+      },
+      "ev_energy_budget": {
+        "name": "Energie pro auto"
+      },
+      "projected_shortfall": {
+        "name": "Předpokládaný deficit"
+      },
+      "surplus_spill": {
+        "name": "Přebytek nad kapacitu baterie"
+      },
+      "loan_headroom": {
+        "name": "Prostor pro výpůjčku"
+      },
+      "required_soc_floor": {
+        "name": "Požadovaná mez SOC"
+      },
+      "trajectory_soc_floor": {
+        "name": "Mez SOC podle předpovědi"
+      },
+      "forecast_remaining_today": {
+        "name": "Zbývající předpověď na dnes"
+      },
+      "forecast_accuracy": {
+        "name": "Přesnost předpovědi"
+      },
+      "target_plan_state": {
+        "name": "Stav cílového plánu"
+      },
+      "target_forecast_surplus": {
+        "name": "Cíl: předpovězený přebytek"
+      },
+      "target_solar_energy": {
+        "name": "Cíl: ze slunce"
+      },
+      "target_grid_energy": {
+        "name": "Cíl: ze sítě"
+      },
+      "target_expected": {
+        "name": "Cíl: očekáváno do odjezdu"
+      },
+      "target_shortfall": {
+        "name": "Cíl: chybí"
+      },
+      "target_charge_pace": {
+        "name": "Cíl: tempo nabíjení"
+      },
+      "charging_from": {
+        "name": "Začátek nabíjení"
+      },
+      "target_hold_until": {
+        "name": "Cíl: odloženo do"
+      },
+      "fast_delivered": {
+        "name": "Naplno: dodáno"
+      },
+      "fast_target": {
+        "name": "Naplno: cíl"
+      },
+      "fast_start": {
+        "name": "Naplno: začátek"
+      },
+      "car_soc": {
+        "name": "SOC auta"
+      },
+      "car_range": {
+        "name": "Dojezd auta"
+      },
+      "car_reading_age": {
+        "name": "Stáří údaje z auta"
+      },
+      "tariff_change": {
+        "name": "Změna tarifu"
+      },
+      "grid_price": {
+        "name": "Cena ze sítě"
+      },
+      "last_poll_age": {
+        "name": "Stáří posledního čtení"
+      },
+      "version": {
+        "name": "Verze"
+      }
+    },
+    "binary_sensor": {
+      "car_connected": {
+        "name": "Auto připojeno"
+      },
+      "charging_now": {
+        "name": "Právě nabíjí"
+      },
+      "battery_hold_active": {
+        "name": "Blokace vybíjení aktivní"
+      },
+      "dry_run": {
+        "name": "Zkušební běh"
+      },
+      "car_reading_stale": {
+        "name": "Zastaralý údaj z auta"
+      },
+      "low_tariff": {
+        "name": "Nízký tarif"
+      },
+      "forecast_available": {
+        "name": "Předpověď k dispozici"
+      }
+    },
+    "select": {
+      "charge_mode": {
+        "name": "Režim nabíjení",
+        "state": {
+          "off": "Off",
+          "solar": "Solar",
+          "forecasted": "Forecasted",
+          "solar_grid": "SolarGrid",
+          "fast_no_battery": "FastNoBattery",
+          "targeted": "Targeted"
+        }
+      },
+      "fast_basis": {
+        "name": "Naplno: čeho dosáhnout",
+        "state": {
+          "full": "Dokud auto nepřestane",
+          "energy": "Energie",
+          "soc": "SOC"
+        }
+      },
+      "target_basis": {
+        "name": "Cíl: čeho dosáhnout",
+        "state": {
+          "energy": "Energie",
+          "soc": "SOC"
+        }
+      },
+      "charge_priority": {
+        "name": "Tempo",
+        "state": {
+          "cheapest": "Nejlevněji",
+          "just_in_time": "Na poslední chvíli"
+        }
+      }
+    },
+    "number": {
+      "fast_energy": {
+        "name": "Naplno: energie"
+      },
+      "fast_target_soc": {
+        "name": "Naplno: cílové SOC"
+      },
+      "target_energy": {
+        "name": "Cílová energie"
+      },
+      "target_soc": {
+        "name": "Cílové SOC"
+      },
+      "target_rest_soc": {
+        "name": "Klidová úroveň"
+      }
+    },
+    "datetime": {
+      "fast_departure": {
+        "name": "Naplno: hotovo do"
+      },
+      "departure": {
+        "name": "Odjezd"
+      }
+    },
+    "switch": {
+      "battery_discharge_hold": {
+        "name": "Blokace vybíjení baterie"
+      },
+      "fast_low_tariff_only": {
+        "name": "Naplno: jen nízký tarif"
+      },
+      "solar_grid_low_tariff_only": {
+        "name": "SolarGrid: jen nízký tarif"
+      },
+      "forecasted_until_full": {
+        "name": "Forecasted: do plna"
+      },
+      "target_sun_only": {
+        "name": "Cíl: jen slunce"
+      },
+      "target_low_tariff_only": {
+        "name": "Cíl: jen nízký tarif"
+      }
+    },
+    "button": {
+      "stop_charging": {
+        "name": "Zastavit nabíjení"
+      }
+    }
+  },
+  "exceptions": {
+    "refused": {
+      "message": "Gleanvolt odmítl: {message}"
+    },
+    "cannot_connect": {
+      "message": "Gleanvolt není dostupný: {error}"
+    },
+    "invalid_auth": {
+      "message": "Klíč API byl odmítnut."
+    },
+    "api_disabled": {
+      "message": "HTTP API je na tomto Gleanvoltu vypnuté."
+    },
+    "not_ready": {
+      "message": "Gleanvolt běží, ale zatím neproběhlo žádné čtení."
+    },
+    "unsupported_version": {
+      "message": "Toto je Gleanvolt {version}; integrace potřebuje {minimum} nebo novější."
+    },
+    "no_entry": {
+      "message": "Není načtená žádná instalace Gleanvoltu."
+    },
+    "no_single_entry": {
+      "message": "Je načteno víc instalací Gleanvoltu: určete jednu pomocí config_entry_id."
+    },
+    "entry_not_loaded": {
+      "message": "Žádná načtená instalace Gleanvoltu nemá položku konfigurace {entry}."
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "solar": "Solar",
+        "forecasted": "Forecasted",
+        "solar_grid": "SolarGrid",
+        "fast_no_battery": "FastNoBattery",
+        "targeted": "Targeted"
+      }
+    },
+    "fast_basis": {
+      "options": {
+        "full": "Dokud auto nepřestane",
+        "energy": "Energie",
+        "soc": "SOC"
+      }
+    },
+    "priority": {
+      "options": {
+        "cheapest": "Nejlevněji",
+        "just_in_time": "Na poslední chvíli"
+      }
+    }
+  },
+  "services": {
+    "start_charging": {
+      "name": "Spustit nabíjení",
+      "description": "Spustí režim s hodnotami zadanými zde, ne s hodnotami držených entit. Když ho Gleanvolt odmítne, akce selže s jeho důvodem.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Instalace",
+          "description": "Který Gleanvolt. Potřeba jen při více instalacích."
+        },
+        "mode": {
+          "name": "Režim",
+          "description": "Režim, který se spustí."
+        },
+        "basis": {
+          "name": "Čeho dosáhnout (naplno)",
+          "description": "FastNoBattery: Dokud auto nepřestane, Energie (čte energii) nebo SOC (čte cílové SOC)."
+        },
+        "energy_kwh": {
+          "name": "Energie",
+          "description": "Energie k dodání, měřená na nabíječce."
+        },
+        "target_soc": {
+          "name": "Cílové SOC",
+          "description": "Stav nabití auta, kterého se má dosáhnout."
+        },
+        "depart_by": {
+          "name": "Odjezd",
+          "description": "Kdy má být auto připravené. FastNoBattery: vynechte pro nabíjení hned."
+        },
+        "priority": {
+          "name": "Tempo",
+          "description": "Targeted: Nejlevněji, nebo Na poslední chvíli s odloženým posledním úsekem."
+        },
+        "rest_soc": {
+          "name": "Klidová úroveň",
+          "description": "Targeted, Na poslední chvíli: kde auto čeká před posledním úsekem."
+        },
+        "sun_only": {
+          "name": "Jen slunce",
+          "description": "Targeted: nic nekupovat ze sítě."
+        },
+        "low_tariff_only": {
+          "name": "Jen nízký tarif",
+          "description": "Targeted: nabíjet jen v nízkém tarifu."
+        }
+      }
+    },
+    "stop_charging": {
+      "name": "Zastavit nabíjení",
+      "description": "Zapíše do nabíječky Stop a vrátí režim na Off; zruší i nastavený cíl.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Instalace",
+          "description": "Který Gleanvolt. Potřeba jen při více instalacích."
+        }
+      }
+    },
+    "preview_targeted": {
+      "name": "Náhled cíleného nabíjení",
+      "description": "Spočítá plán cíleného nabíjení a vrátí ho, aniž by cokoli spustil nebo zapsal do nabíječky.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Instalace",
+          "description": "Který Gleanvolt. Potřeba jen při více instalacích."
+        },
+        "energy_kwh": {
+          "name": "Energie",
+          "description": "Energie k dodání, měřená na nabíječce."
+        },
+        "target_soc": {
+          "name": "Cílové SOC",
+          "description": "Stav nabití auta, kterého se má dosáhnout."
+        },
+        "depart_by": {
+          "name": "Odjezd",
+          "description": "Kdy má být auto připravené. FastNoBattery: vynechte pro nabíjení hned."
+        },
+        "priority": {
+          "name": "Tempo",
+          "description": "Targeted: Nejlevněji, nebo Na poslední chvíli s odloženým posledním úsekem."
+        },
+        "rest_soc": {
+          "name": "Klidová úroveň",
+          "description": "Targeted, Na poslední chvíli: kde auto čeká před posledním úsekem."
+        },
+        "sun_only": {
+          "name": "Jen slunce",
+          "description": "Targeted: nic nekupovat ze sítě."
+        },
+        "low_tariff_only": {
+          "name": "Jen nízký tarif",
+          "description": "Targeted: nabíjet jen v nízkém tarifu."
+        }
+      }
+    }
+  }
+}

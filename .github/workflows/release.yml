@@ -1,0 +1,29 @@
+# A tag v<x.y.z> publishes a GitHub release, which is what HACS offers as a version. The tag must match
+# manifest.json's version, so what HACS installs reports the version it was released as.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag matches manifest.json
+        run: |
+          manifest=$(jq -r .version custom_components/gleanvolt/manifest.json)
+          if [ "v$manifest" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME, but manifest.json says $manifest"
+            exit 1
+          fi
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes

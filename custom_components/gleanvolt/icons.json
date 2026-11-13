@@ -1,0 +1,68 @@
+{
+  "entity": {
+    "sensor": {
+      "charge_mode": { "default": "mdi:ev-station" },
+      "control_state": { "default": "mdi:state-machine" },
+      "charger_status": { "default": "mdi:ev-plug-type2" },
+      "solar_power": { "default": "mdi:solar-power" },
+      "forecast_solar_power": { "default": "mdi:solar-power-variant-outline" },
+      "solar_surplus": { "default": "mdi:solar-power-variant" },
+      "grid_power": { "default": "mdi:transmission-tower" },
+      "ev_charging_power": { "default": "mdi:car-electric" },
+      "battery_loan_power": { "default": "mdi:battery-arrow-down-outline" },
+      "battery_loaned_today": { "default": "mdi:battery-arrow-down-outline" },
+      "tomorrow_forecast": { "default": "mdi:weather-sunny" },
+      "plan_state": { "default": "mdi:text-box-outline" },
+      "target_plan_state": { "default": "mdi:text-box-outline" },
+      "forecast_accuracy": { "default": "mdi:bullseye-arrow" },
+      "car_range": { "default": "mdi:map-marker-distance" },
+      "car_reading_age": { "default": "mdi:car-clock" },
+      "tariff_change": { "default": "mdi:clock-outline" },
+      "grid_price": { "default": "mdi:cash" },
+      "charging_from": { "default": "mdi:clock-start" },
+      "target_hold_until": { "default": "mdi:clock-end" },
+      "fast_start": { "default": "mdi:clock-start" },
+      "last_poll_age": { "default": "mdi:update" },
+      "version": { "default": "mdi:information-outline" }
+    },
+    "binary_sensor": {
+      "battery_hold_active": { "default": "mdi:battery-lock" },
+      "dry_run": { "default": "mdi:test-tube" },
+      "low_tariff": { "default": "mdi:cash-clock" },
+      "forecast_available": { "default": "mdi:weather-partly-cloudy" }
+    },
+    "select": {
+      "charge_mode": { "default": "mdi:ev-station" },
+      "fast_basis": { "default": "mdi:target" },
+      "target_basis": { "default": "mdi:target" },
+      "charge_priority": { "default": "mdi:sort-clock-ascending-outline" }
+    },
+    "number": {
+      "fast_energy": { "default": "mdi:lightning-bolt" },
+      "fast_target_soc": { "default": "mdi:battery-charging-80" },
+      "target_energy": { "default": "mdi:lightning-bolt" },
+      "target_soc": { "default": "mdi:battery-charging-80" },
+      "target_rest_soc": { "default": "mdi:battery-clock" }
+    },
+    "datetime": {
+      "fast_departure": { "default": "mdi:car-clock" },
+      "departure": { "default": "mdi:car-clock" }
+    },
+    "switch": {
+      "battery_discharge_hold": { "default": "mdi:battery-lock" },
+      "fast_low_tariff_only": { "default": "mdi:cash-clock" },
+      "solar_grid_low_tariff_only": { "default": "mdi:cash-clock" },
+      "forecasted_until_full": { "default": "mdi:battery-arrow-up" },
+      "target_sun_only": { "default": "mdi:white-balance-sunny" },
+      "target_low_tariff_only": { "default": "mdi:cash-clock" }
+    },
+    "button": {
+      "stop_charging": { "default": "mdi:stop-circle-outline" }
+    }
+  },
+  "services": {
+    "start_charging": { "service": "mdi:play-circle-outline" },
+    "stop_charging": { "service": "mdi:stop-circle-outline" },
+    "preview_targeted": { "service": "mdi:calendar-clock" }
+  }
+}
