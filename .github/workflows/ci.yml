@@ -29,9 +29,9 @@ jobs:
     steps:
       - uses: hacs/action@main
         with:
+          # No ignore: the catalog (hacs/default) needs this to pass in full. The icon and logo ship in
+          # custom_components/gleanvolt/brand/, which counts for the brands check.
           category: integration
-          # Not in home-assistant/brands: the icon and logo ship in custom_components/gleanvolt/brand/.
-          ignore: brands
 
   lint:
     name: ruff
