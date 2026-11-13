@@ -197,7 +197,10 @@ async function cardHelpers() {
   return window.loadCardHelpers();
 }
 
-/** The card configuration for one installation, built from Home Assistant's own cards. */
+/**
+ * The card configurations for one installation, as three blocks laid out by width: PV status,
+ * charging, and the mode card (the running mode's figures and Stop, or the mode to start).
+ */
 function buildConfig(hass, deviceId, showName) {
   const ids = entityMap(hass, deviceId);
   const t = text(hass);
@@ -218,10 +221,14 @@ function buildConfig(hass, deviceId, showName) {
   const titled = (title) => (showName ? `${device} · ${title}` : title);
   const whenMode = (state) => [{ condition: "state", entity: ids[LAYOUT.mode], state }];
 
-  const cards = [
-    { type: "entities", title: titled(t.pv), state_color: true, entities: rows(LAYOUT.pv) },
-    { type: "entities", title: titled(t.charging), state_color: true, entities: rows(LAYOUT.charging) },
-  ];
+  const pv = { type: "entities", title: titled(t.pv), state_color: true, entities: rows(LAYOUT.pv) };
+  const status = {
+    type: "entities",
+    title: titled(t.charging),
+    state_color: true,
+    entities: rows(LAYOUT.charging),
+  };
+  const cards = [];
 
   if (ids[LAYOUT.mode]) {
     // Gleanvolt is charging: that mode's figures, and Stop. Nothing to change or edit.
@@ -256,8 +263,25 @@ function buildConfig(hass, deviceId, showName) {
       }
     }
   }
-  return { type: "vertical-stack", cards };
+  return { pv, status, mode: { type: "vertical-stack", cards } };
 }
+
+// One column on a phone; PV status beside charging from 760 px; three columns from 1150 px. Container
+// queries, so the card follows the width it is given: the whole panel, or one dashboard column.
+const STYLE = `
+  :host { display: block; container-type: inline-size; }
+  .grid { display: grid; gap: var(--ha-section-grid-row-gap, 8px) 16px; align-items: start;
+    grid-template-columns: minmax(0, 1fr); grid-template-areas: "pv" "status" "mode"; }
+  .pv { grid-area: pv; } .status { grid-area: status; } .mode { grid-area: mode; }
+  .mode:empty { display: none; }
+  @container (min-width: 760px) {
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "pv status" "pv mode"; }
+  }
+  @container (min-width: 1150px) {
+    .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "pv status mode"; }
+  }
+`;
+const BLOCKS = ["pv", "status", "mode"];
 
 /**
  * The Gleanvolt card. Optional `device_id` picks the installation when there is more than one;
@@ -277,6 +301,12 @@ class GleanvoltCard extends HTMLElement {
   async _update() {
     const hass = this._hass;
     if (!hass) return;
+    if (!this._root) {
+      this._root = this.attachShadow({ mode: "open" });
+      this._root.innerHTML = `<style>${STYLE}</style><div class="grid"></div>`;
+      this._grid = this._root.querySelector(".grid");
+      this._cards = [];
+    }
     const deviceId = (this._config && this._config.device_id) || gleanvoltDevices(hass)[0];
     if (!deviceId) {
       if (this._signature !== "none") {
@@ -293,10 +323,15 @@ class GleanvoltCard extends HTMLElement {
       this._building = true;
       try {
         const helpers = await cardHelpers();
-        const card = helpers.createCardElement(config);
-        this.innerHTML = "";
-        this.appendChild(card);
-        this._card = card;
+        this._grid.innerHTML = "";
+        this._cards = BLOCKS.map((block) => {
+          const holder = document.createElement("div");
+          holder.className = block;
+          const card = helpers.createCardElement(config[block]);
+          holder.appendChild(card);
+          this._grid.appendChild(holder);
+          return card;
+        });
         this._signature = signature;
       } catch (err) {
         // Said on the page rather than left blank, so a failure can be reported.
@@ -307,17 +342,17 @@ class GleanvoltCard extends HTMLElement {
         this._building = false;
       }
     }
-    if (this._card) this._card.hass = this._hass;
+    for (const card of this._cards) card.hass = this._hass;
   }
 
   _message(message) {
-    this.innerHTML = "";
+    this._grid.innerHTML = "";
     const card = document.createElement("ha-card");
     card.style.display = "block";
     card.style.padding = "16px";
     card.textContent = message;
-    this.appendChild(card);
-    this._card = null;
+    this._grid.appendChild(card);
+    this._cards = [];
   }
 
   getCardSize() {
@@ -329,7 +364,10 @@ class GleanvoltCard extends HTMLElement {
   }
 }
 
-/** The sidebar panel: one Gleanvolt card per installation, named when there is more than one. */
+/**
+ * The sidebar panel: one Gleanvolt card per installation, one under another and each the full
+ * width, so the card can spread into columns. Named when there is more than one.
+ */
 class GleanvoltPanel extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
@@ -356,8 +394,8 @@ class GleanvoltPanel extends HTMLElement {
             padding: 0 12px; background: var(--app-header-background-color, var(--primary-color));
             color: var(--app-header-text-color, var(--text-primary-color)); font-size: 20px; }
           .toolbar .title { margin-left: 12px; }
-          .cards { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; padding: 16px; }
-          .cards > * { flex: 1 1 360px; max-width: 520px; }
+          .cards { display: flex; flex-direction: column; gap: 24px; padding: 16px;
+            max-width: 1800px; margin: 0 auto; }
         </style>
         <div class="toolbar"><ha-menu-button></ha-menu-button><span class="title">Gleanvolt</span></div>
         <div class="cards"></div>`;
