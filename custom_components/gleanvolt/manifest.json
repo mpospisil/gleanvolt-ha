@@ -6,6 +6,10 @@
     "http",
     "panel_custom"
   ],
+  "categories": [
+    "energy.ev_charging",
+    "energy.solar_batteries"
+  ],
   "codeowners": [
     "@mpospisil"
   ],
