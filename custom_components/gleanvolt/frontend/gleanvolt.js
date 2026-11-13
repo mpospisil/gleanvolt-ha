@@ -133,6 +133,27 @@ function entityMap(hass, deviceId) {
   return map;
 }
 
+/**
+ * Home Assistant's card factory. It lives in the dashboards' code, which a page loads only once a
+ * dashboard has been opened, so a panel opened straight after a refresh has to load it first: the
+ * panel resolver knows how, and is asked for the "lovelace" panel's route without showing it.
+ */
+async function cardHelpers() {
+  if (!window.loadCardHelpers) {
+    await customElements.whenDefined("partial-panel-resolver");
+    const resolver = document.createElement("partial-panel-resolver");
+    const getRoutes = (resolver._getRoutes || resolver.getRoutes).bind(resolver);
+    const routes = getRoutes([{ component_name: "lovelace", url_path: "gleanvolt-loader" }]);
+    const route = routes && routes.routes && routes.routes["gleanvolt-loader"];
+    if (route && route.load) await route.load();
+    for (let i = 0; i < 50 && !window.loadCardHelpers; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  if (!window.loadCardHelpers) throw new Error("Home Assistant's card helpers did not load");
+  return window.loadCardHelpers();
+}
+
 /** The card configuration for one installation, built from Home Assistant's own cards. */
 function buildConfig(hass, deviceId) {
   const ids = entityMap(hass, deviceId);
@@ -193,12 +214,7 @@ class GleanvoltCard extends HTMLElement {
     if (!deviceId) {
       if (this._signature !== "none") {
         this._signature = "none";
-        this.innerHTML = "";
-        const card = document.createElement("ha-card");
-        card.style.padding = "16px";
-        card.textContent = text(hass).none;
-        this.appendChild(card);
-        this._card = null;
+        this._message(text(hass).none);
       }
       return;
     }
@@ -208,17 +224,32 @@ class GleanvoltCard extends HTMLElement {
       // Rebuilt only when the entities or the language change; otherwise just fed the new state.
       this._building = true;
       try {
-        const helpers = await window.loadCardHelpers();
+        const helpers = await cardHelpers();
         const card = helpers.createCardElement(config);
         this.innerHTML = "";
         this.appendChild(card);
         this._card = card;
         this._signature = signature;
+      } catch (err) {
+        // Said on the page rather than left blank, so a failure can be reported.
+        console.error("Gleanvolt card", err);
+        this._signature = signature;
+        this._message(`Gleanvolt: ${err && err.message ? err.message : err}`);
       } finally {
         this._building = false;
       }
     }
     if (this._card) this._card.hass = this._hass;
+  }
+
+  _message(message) {
+    this.innerHTML = "";
+    const card = document.createElement("ha-card");
+    card.style.display = "block";
+    card.style.padding = "16px";
+    card.textContent = message;
+    this.appendChild(card);
+    this._card = null;
   }
 
   getCardSize() {
