@@ -1,7 +1,14 @@
 {
   "domain": "gleanvolt",
   "name": "Gleanvolt",
-  "codeowners": ["@mpospisil"],
+  "after_dependencies": [
+    "frontend",
+    "http",
+    "panel_custom"
+  ],
+  "codeowners": [
+    "@mpospisil"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/mpospisil/gleanvolt-ha",
   "integration_type": "device",
@@ -9,5 +16,7 @@
   "issue_tracker": "https://github.com/mpospisil/gleanvolt-ha/issues",
   "requirements": [],
   "version": "0.1.0",
-  "zeroconf": ["_gleanvolt._tcp.local."]
+  "zeroconf": [
+    "_gleanvolt._tcp.local."
+  ]
 }

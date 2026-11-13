@@ -44,6 +44,8 @@ jobs:
       - uses: astral-sh/ruff-action@v3
         with:
           args: format --check
+      - name: The panel's JavaScript parses
+        run: node --check custom_components/gleanvolt/frontend/gleanvolt.js
 
   test:
     name: pytest

@@ -279,6 +279,16 @@
           "targeted": "Targeted"
         }
       },
+      "mode_to_start": {
+        "name": "Režim ke spuštění",
+        "state": {
+          "solar": "Solar",
+          "forecasted": "Forecasted",
+          "solar_grid": "SolarGrid",
+          "fast_no_battery": "FastNoBattery",
+          "targeted": "Targeted"
+        }
+      },
       "fast_basis": {
         "name": "Naplno: čeho dosáhnout",
         "state": {
@@ -348,6 +358,9 @@
       }
     },
     "button": {
+      "start_mode": {
+        "name": "Spustit"
+      },
       "stop_charging": {
         "name": "Zastavit nabíjení"
       }
