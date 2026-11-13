@@ -20,8 +20,15 @@ older one, naming the version it found.
    `home-assistant` as the client's name, and press **Create key**. Then press **Restart** on
    **Settings → Health**. The key's name is what the log and each charging session record as the
    source of an action, for example *"API (home-assistant) started Targeted"*.
-2. **In HACS**, open **⋮ → Custom repositories** and add `https://github.com/mpospisil/gleanvolt-ha`
-   with the type **Integration**. Install **Gleanvolt**, then restart Home Assistant.
+2. **Install it.**
+   - **Home Assistant 2026.11 and later** use the built-in Marketplace, which replaced HACS. Open
+     **Settings → Marketplace** (accept the warning the first time), choose **Add from link**, enter
+     `mpospisil/gleanvolt-ha`, and **Add**. If it asks you to connect GitHub, approve it on github.com;
+     if it asks for a **Type**, choose **Integration**. Open **Gleanvolt**, install it, and restart Home
+     Assistant when the repair asks for it.
+   - **Older Home Assistant, with HACS:** open **HACS → ⋮ → Custom repositories** and add
+     `https://github.com/mpospisil/gleanvolt-ha` with the type **Integration**. Install **Gleanvolt**,
+     then restart Home Assistant.
 3. **Settings → Devices & services.** Gleanvolt announces itself on the network (`_gleanvolt._tcp`),
    so Home Assistant offers **Gleanvolt discovered** with the address filled in. Paste the key. If
    it isn't discovered, use **Add integration → Gleanvolt** and enter the host, the port (8090) and
@@ -148,7 +155,8 @@ version.
 
 **Releasing:** set `version` in `custom_components/gleanvolt/manifest.json` and push a tag
 `v<that version>`. The release workflow checks that the two match and publishes a GitHub release,
-which HACS offers as an update.
+which the Marketplace (or HACS) offers as an update. The Marketplace checks for new releases every 6
+hours. Without a release it installs from `main`, with nothing to compare an update against.
 
 ## License
 
