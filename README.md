@@ -75,11 +75,14 @@ away with the same held parameters, and **Off** stops charging, as does **Stop c
 refuses, for example *Targeted* with no departure set, Home Assistant shows its reason and nothing
 starts.
 
-The device page lists every entity at once, because Home Assistant has no way to show only some.
-[`dashboard/gleanvolt-card.yaml`](dashboard/gleanvolt-card.yaml) is a card that does: pick a mode in
-*Mode to start*, and only that mode's controls and figures appear, the way a tab does. Replace
-`gleanvolt_` in it with your device's entity prefix (for a device named *Home roof*:
-`sed 's/\.gleanvolt_/.home_roof_/g'`), then in a dashboard **Edit → Add card → Manual** and paste.
+**The Gleanvolt panel** in the sidebar shows this the way the web UI does. Pick a mode in *Mode to
+start*, and only that mode's controls and figures appear, with its **Start** button, the way a tab
+does. Nothing has to be set up: the integration adds the panel when it loads, with a card per
+installation. The same view is in the card picker as **Gleanvolt** (*Edit dashboard → Add card →
+Gleanvolt*), with no configuration, for anyone who wants it on their own dashboard. With more than one
+installation, the card takes `device_id`. The card finds its entities by the integration's own keys, so
+renamed entities, an area in the entity id, or a Home Assistant in Czech make no difference. The device
+page still lists every entity at once.
 
 Gleanvolt still boots in `Off` and starts charging only when asked. While a *Targeted* or *Fast*
 charge runs, the plan sensors show the running request, wherever it was started. The held entities

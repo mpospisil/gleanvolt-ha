@@ -31,6 +31,7 @@ from .const import (
 )
 from .coordinator import GleanvoltSlowCoordinator, GleanvoltStatusCoordinator
 from .data import GleanvoltConfigEntry, GleanvoltRuntime
+from .panel import async_register_frontend, async_remove_panel
 from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [
@@ -104,6 +105,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: GleanvoltConfigEntry) ->
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await async_register_frontend(hass)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     return True
 
@@ -113,4 +115,11 @@ async def _async_options_updated(hass: HomeAssistant, entry: GleanvoltConfigEntr
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: GleanvoltConfigEntry) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded and not [
+        other
+        for other in hass.config_entries.async_loaded_entries(DOMAIN)
+        if other.entry_id != entry.entry_id
+    ]:
+        async_remove_panel(hass)
+    return unloaded
