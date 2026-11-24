@@ -448,7 +448,7 @@
           "Gleanvolt"
         ],
         "summary": "Start controlled charging in a mode",
-        "description": "Writes the charger's Fast use-mode and then selects the mode, so this works on a charger sitting in Green rather than requiring somebody to have set the wallbox by hand.\n\nFor 'targeted', pass the same target the preview took — it is set as the active request before the mode is selected, and dropped again if the charger refuses.\n\nFor 'fastNoBattery', 'fast' says how much to deliver before the mode stops itself: an amount of energy, a state of charge, or 'full' to let the car decide (the default, and what you get by omitting it). It is a stopping condition and nothing more — the charger stays pinned at the installation's maximum either way.\n\nAdd 'departBy' and the charge is deferred instead: it starts as late as it can and still finish in time, so a pack asked to go above 80% spends minutes there rather than a whole night. It needs an amount to work back from, so a departure with 'full' is refused. Read the schedule back under fastCharge.schedule on the status.\n\nA refused hardware write is reported as 200 with succeeded=false and a message, not as an HTTP error: the call was understood and the controller is in a well-defined state (exactly the one it was in before). Read the flag, not the status code.\n\nThe returned status is from the last completed poll, so the powers in it will not reflect this action until the next one lands.",
+        "description": "Writes the charger's Fast use-mode and then selects the mode, so this works on a charger sitting in Green rather than requiring somebody to have set the wallbox by hand.\n\nFor 'targeted', pass the same target the preview took — it is set as the active request before the mode is selected, and dropped again if the charger refuses.\n\nFor 'fastNoBattery', 'fast' says how much to deliver before the mode stops itself: an amount of energy, a state of charge, or 'full' to let the car decide (the default, and what you get by omitting it). It is a stopping condition and nothing more — the charger stays pinned at the installation's maximum either way.\n\nAdd 'departBy' and the charge is deferred instead: it starts as late as it can and still finish in time, so a pack asked to go above 80% spends minutes there rather than a whole night. It needs an amount to work back from, so a departure with 'full' is refused. Read the schedule back under fastCharge.schedule on the status.\n\nA refused hardware write is reported as 200 with succeeded=false and a message, not as an HTTP error: the call was understood and the controller is in a well-defined state (exactly the one it was in before). Read the flag, not the status code.\n\nThe returned status is from the last completed poll, so the powers in it will not reflect this action until the next one lands.\n\nWhile Gleanvolt can't control the charger (chargerAvailable false on the status: no plugin, a refused one, a charger that can't be read), nothing is started and the answer is 409 with the reason.",
         "operationId": "startCharging",
         "requestBody": {
           "content": {
@@ -480,6 +480,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -490,7 +500,7 @@
           "Gleanvolt"
         ],
         "summary": "Start a targeted charge under the limits a quoted plan was edited into",
-        "description": "Takes the same body as POST /plans/targeted/preview — quote a plan, edit its 'editable' limits, and send the whole thing here to charge under them.\n\nWhat you edit are **limits, not a schedule**, and that is the feature rather than a simplification of it. The plan is rebuilt on every poll from a refreshed forecast and the measured delivery, which is what lets a sunnier afternoon than forecast shrink the grid block before any of it is bought. Replaying a list of blocks would give that up, and would go on buying grid for energy already in the car. So the planner keeps planning — inside the window you gave it.\n\nA limit that makes the request impossible is refused here with the reason, before anything starts. A limit that merely makes it expensive or partial is accepted, and whatever it puts out of reach is reported as shortfall: a constraint may reduce what is delivered, it may never make the plan lie about what will be.\n\nSend the quoted plan's 'planId' back and 'forecastMovedSinceQuote' says whether the forecast has been refreshed since you were shown it. Advisory only — nothing is stored server-side and a start never fails because of it.",
+        "description": "Takes the same body as POST /plans/targeted/preview — quote a plan, edit its 'editable' limits, and send the whole thing here to charge under them.\n\nWhat you edit are **limits, not a schedule**, and that is the feature rather than a simplification of it. The plan is rebuilt on every poll from a refreshed forecast and the measured delivery, which is what lets a sunnier afternoon than forecast shrink the grid block before any of it is bought. Replaying a list of blocks would give that up, and would go on buying grid for energy already in the car. So the planner keeps planning — inside the window you gave it.\n\nA limit that makes the request impossible is refused here with the reason, before anything starts. A limit that merely makes it expensive or partial is accepted, and whatever it puts out of reach is reported as shortfall: a constraint may reduce what is delivered, it may never make the plan lie about what will be.\n\nSend the quoted plan's 'planId' back and 'forecastMovedSinceQuote' says whether the forecast has been refreshed since you were shown it. Advisory only — nothing is stored server-side and a start never fails because of it.\n\n409 while the charger is unavailable, as for POST /charging/start.",
         "operationId": "startTargetedCharging",
         "requestBody": {
           "content": {
@@ -515,6 +525,16 @@
           },
           "400": {
             "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -626,7 +646,7 @@
           "Gleanvolt"
         ],
         "summary": "Make fastNoBattery or solarGrid wait for low tariff",
-        "description": "With it on, fastNoBattery waits through high tariff and charges flat out once low tariff starts, and high tariff pauses solarGrid, sun or not. A wait is never read as a full car. Applies from the next poll, to a running mode too, and does not persist across restarts. Writes nothing to hardware itself; the mode does, on the next poll.",
+        "description": "With it on, fastNoBattery waits through high tariff and charges flat out once low tariff starts, and high tariff pauses solarGrid, sun or not. A wait is never read as a full car. Applies from the next poll, to a running mode too, and is kept across restarts. Writes nothing to hardware itself; the mode does, on the next poll.",
         "operationId": "setLowTariffOnly",
         "requestBody": {
           "content": {
@@ -645,6 +665,68 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LowTariffOnlyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/charging/settings": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Minimum battery SOC, SOC resume margin and min solar surplus",
+        "description": "The three day-to-day numbers as the controller is using them now: the runtime values, which start from configuration and follow any change made from the web UI, Home Assistant or this API. GET /status carries the same object as 'settings'.",
+        "operationId": "getChargingSettings",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargingSettingsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "Change minimum battery SOC, SOC resume margin or min solar surplus",
+        "description": "Any subset: a field left out is left as it is. The same ranges as the web UI and the Home Assistant numbers — minimum battery SOC 0–100 %, SOC resume margin 0–50 %, min solar surplus 0–20000 W. A value out of range is a 400 that lists every problem under 'problems', and nothing is written. Applies from the next poll, to a running mode too, and is kept across restarts. Writes no hardware.",
+        "operationId": "setChargingSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChargingSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChargingSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -812,6 +894,31 @@
           }
         }
       }
+    },
+    "/api/v1/providers": {
+      "get": {
+        "tags": [
+          "Gleanvolt"
+        ],
+        "summary": "The external data providers and their sessions",
+        "description": "Each kind of data an outside program can supply over its SignalR hub on the web port, whether it is on, whether a provider is connected, and when its data last arrived. Kinds are turned on and their tokens made on Settings.",
+        "operationId": "listExternalProviders",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalProviderResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -939,16 +1046,27 @@
           "targeted",
           "solarGrid"
         ],
-        "description": "The charge-control mode, selectable at runtime (e.g. from Home Assistant).\n\n- `off`: Don't control the charger; leave its current setpoint exactly as it is.\n\n- `solar`: Modulate the charging current from live solar surplus while the battery is full: set the current the sun can cover, or pause when there isn't enough. Only acts while the charger's own use-mode is Fast.\n\n- `forecasted`: As Solar, but the fixed battery-full gate is replaced by a forecast-driven day plan: the Solcast forecast decides how much of today's remaining sun the car may have, so the home battery still reaches 100% by the configured evening deadline. Sub-minimum (\"shoulder\") power is left to the house and battery, the midday plateau is released to the car, and the battery may lend power briefly when the forecast can repay it. Falls back to Solar behaviour whenever no usable forecast is available. Takes no amount: the car charges until its own charge limit stops it, or the sun runs out. For an amount by a time, use Targeted.\n\n- `fastNoBattery`: Charge the car as fast as the installation allows, and keep the home battery out of it: the current setpoint is pinned at the configured maximum whatever the sun is doing (PV covers what it can, the grid covers the rest) and the battery discharge hold is armed for as long as the mode is selected. When the car stops drawing because it has reached its own charge limit, the setpoint drops to the pause current and the mode returns itself to Off, which releases the hold. Like the other modes it only acts while the charger's own use-mode is Fast.\n\n- `targeted`: Deliver a stated amount of energy by a stated departure time, with as little grid as possible: the car takes every kilowatt-hour of forecast surplus the home battery has not already claimed, and the grid covers only the remainder — in a block placed as late as it can be and still finish in time, so a sunnier afternoon than forecast shrinks it before any of it is bought. When there is not enough time left for the request, it charges flat out and reports how far short it will fall rather than pretending otherwise. The home battery keeps its priority throughout, and the discharge hold arms while the grid block runs so the pack never feeds the car. The request does not survive a restart. Like the other modes it only acts while the charger's own use-mode is Fast.\n\n- `solarGrid`: Charge from the sun with the grid allowed to help, for as long as today's sun lasts: while the smoothed surplus clears an owner-set minimum the car follows it, and a surplus that clears the minimum but not the charger's 6 A floor is topped up to the floor from the grid, with the discharge hold armed so the home battery never pays for it. There is no battery-full gate. A dip below the minimum pauses the car through the same smoothing and dwell timers the other solar modes use; once the forecast shows no sun left today that clears the minimum, the mode returns itself to Off. Like the other modes it only acts while the charger's own use-mode is Fast."
+        "description": "The charge-control mode, selectable at runtime (e.g. from Home Assistant).\n\n- `off`: Don't control the charger; leave its current setpoint exactly as it is.\n\n- `solar`: Modulate the charging current from live solar surplus while the battery is full: set the current the sun can cover, or pause when there isn't enough. Only acts while the charger's own use-mode is Fast.\n\n- `forecasted`: As Solar, but the fixed battery-full gate is replaced by a forecast-driven day plan: the Solcast forecast decides how much of today's remaining sun the car may have, so the home battery still reaches 100% by the configured evening deadline. Sub-minimum (\"shoulder\") power is left to the house and battery, the midday plateau is released to the car, and the battery may lend power briefly when the forecast can repay it. Falls back to Solar behaviour whenever no usable forecast is available. Takes no amount: the car charges until its own charge limit stops it, or the sun runs out. For an amount by a time, use Targeted.\n\n- `fastNoBattery`: Charge the car as fast as the installation allows, and keep the home battery out of it: the current setpoint is pinned at the configured maximum whatever the sun is doing (PV covers what it can, the grid covers the rest) and the battery discharge hold is armed for as long as the mode is selected. When the car stops drawing because it has reached its own charge limit, the setpoint drops to the pause current and the mode returns itself to Off, which releases the hold. Like the other modes it only acts while the charger's own use-mode is Fast.\n\n- `targeted`: Deliver a stated amount of energy by a stated departure time, with as little grid as possible: the car takes every kilowatt-hour of forecast surplus the home battery has not already claimed, and the grid covers only the remainder — in a block placed as late as it can be and still finish in time, so a sunnier afternoon than forecast shrinks it before any of it is bought. When there is not enough time left for the request, it charges flat out and reports how far short it will fall rather than pretending otherwise. The home battery keeps its priority throughout, and the discharge hold arms while the grid block runs so the pack never feeds the car. A restart resumes the request while its departure is ahead (#413). Like the other modes it only acts while the charger's own use-mode is Fast.\n\n- `solarGrid`: Charge from the sun with the grid allowed to help, for as long as today's sun lasts: while the smoothed surplus clears an owner-set minimum the car follows it, and a surplus that clears the minimum but not the charger's 6 A floor is topped up to the floor from the grid, with the discharge hold armed so the home battery never pays for it. There is no battery-full gate. A dip below the minimum pauses the car through the same smoothing and dwell timers the other solar modes use; once the forecast shows no sun left today that clears the minimum, the mode returns itself to Off. Like the other modes it only acts while the charger's own use-mode is Fast."
       },
       "ChargeControlState": {
         "enum": [
           "disabled",
           "idle",
           "charging",
-          "paused"
+          "paused",
+          "suspended"
         ],
-        "description": "A coarse, display-friendly summary of what charge control is doing right now.\n\n- `disabled`: Control is switched off; the charger is left to the owner.\n\n- `idle`: Enabled, but conditions aren't met (battery not full, no surplus, or not controllable).\n\n- `charging`: Actively driving the charger from solar surplus.\n\n- `paused`: Held control but suspended charging (surplus below the minimum)."
+        "description": "A coarse, display-friendly summary of what charge control is doing right now.\n\n- `disabled`: Control is switched off; the charger is left to the owner.\n\n- `idle`: Enabled, but conditions aren't met (battery not full, no surplus, or not controllable).\n\n- `charging`: Actively driving the charger from solar surplus.\n\n- `paused`: Held control but suspended charging (surplus below the minimum).\n\n- `suspended`: A mode is selected, but the charger has been unavailable for longer than the grace period (#441): nothing is commanded and the battery hold is released until it is back, when the mode resumes."
+      },
+      "ChargerAvailabilityState": {
+        "enum": [
+          "available",
+          "noPlugin",
+          "needsOwner",
+          "error"
+        ],
+        "description": "Whether Gleanvolt can control the charger (#441), in the four states Home Assistant shows.\n\n- `available`: The charger answers and its plugin, if any, is connected and well.\n\n- `noPlugin`: The charger is behind a plugin and none is connected.\n\n- `needsOwner`: Only the owner can fix it: a plugin refused for its limits or for another being remembered, or one asking for its owner.\n\n- `error`: The charger can't be read, or its plugin reports it isn't working.",
+        "default": "available"
       },
       "ChargingSessionEndReason": {
         "enum": [
@@ -981,6 +1099,80 @@
           "chargerRearmed"
         ],
         "description": "The sparse, human-readable things that happen inside a session. Samples say what the numbers were;\nevents say what changed and why, which is what makes a session chart legible rather than a set of\nunexplained steps.\n\n- `sessionStarted`: The session opened.\n\n- `modeChanged`: The charge-control mode changed without the session ending (e.g. Forecasted → FastNoBattery).\n\n- `chargingStarted`: Control state moved to Charging.\n\n- `chargingPaused`: Control state moved to Paused.\n\n- `targetCurrentChanged`: The commanded current setpoint changed.\n\n- `batteryHoldArmed`: The battery discharge hold was armed.\n\n- `batteryHoldReleased`: The battery discharge hold was released.\n\n- `planUnusable`: The forecast-driven day plan became unusable (no forecast, stale, or out of the trust band).\n\n- `planUsable`: A usable day plan became available again.\n\n- `sessionEnded`: The session closed.\n\n- `chargerStoodDown`: The mode put the charger in Stop for a wait, rather than holding it in Fast at 0 A (#280).\n\n- `chargerRearmed`: The mode switched a stood-down charger back to Fast to charge."
+      },
+      "ChargingSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "minBatterySocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The SOC the home battery is kept above, 0–100 %.",
+            "format": "double"
+          },
+          "socResumeMarginPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "How far above that minimum the battery must recover before a paused charge resumes, 0–50 %.",
+            "format": "double"
+          },
+          "minSolarSurplusWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The surplus `solarGrid` needs before the grid may help the car, 0–20000 W.",
+            "format": "double"
+          }
+        },
+        "description": "Change any of the three day-to-day numbers (issue #392). A field left out, or null, is left as it is.\nEvery field is checked before any is written: one out of range refuses the whole request."
+      },
+      "ChargingSettingsResponse": {
+        "required": [
+          "minBatterySocPercent",
+          "socResumeMarginPercent",
+          "minSolarSurplusWatts"
+        ],
+        "type": "object",
+        "properties": {
+          "minBatterySocPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The SOC the home battery is kept above.",
+            "format": "double"
+          },
+          "socResumeMarginPercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "How far above that minimum the battery must recover before a paused charge resumes.",
+            "format": "double"
+          },
+          "minSolarSurplusWatts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The surplus `solarGrid` needs before the grid may help the car.",
+            "format": "double"
+          }
+        },
+        "description": "The three day-to-day numbers as the controller is using them: the runtime values, which start from\nconfiguration and follow any change made from the web UI, Home Assistant or the API. A change takes\neffect on the next poll, including for a mode already running, and is kept across restarts."
       },
       "ControlActionResponse": {
         "required": [
@@ -1616,6 +1808,190 @@
         },
         "description": "The car itself (issue #124): what it is and what it will accept, as distinct from the reading it\nlast sent. Configuration, so it changes only across a restart."
       },
+      "ExternalProviderRefusalResponse": {
+        "required": [
+          "providerId",
+          "providerName",
+          "code",
+          "reason",
+          "at"
+        ],
+        "type": "object",
+        "properties": {
+          "providerId": {
+            "type": "string",
+            "description": "The refused provider's id."
+          },
+          "providerName": {
+            "type": "string",
+            "description": "Its name."
+          },
+          "code": {
+            "type": "string",
+            "description": "Why, as the provider was told: e.g. `limits` (the charger can't do what ChargeControl is set to) or\n`another-provider` (another provider is connected, or for the charger, remembered)."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, in English, naming the setting to change where there is one."
+          },
+          "at": {
+            "type": "string",
+            "description": "When.",
+            "format": "date-time"
+          }
+        },
+        "description": "A provider's connection that Gleanvolt refused (#440)."
+      },
+      "ExternalProviderResponse": {
+        "required": [
+          "kind",
+          "name",
+          "hubPath",
+          "hasToken",
+          "state",
+          "providerId",
+          "providerName",
+          "providerVersion",
+          "since",
+          "lastDataAt",
+          "lastProblems",
+          "healthy",
+          "statusMessage",
+          "unanswered"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "The kind's id, e.g. `tariff`."
+          },
+          "name": {
+            "type": "string",
+            "description": "The kind's name."
+          },
+          "hubPath": {
+            "type": "string",
+            "description": "Where its SignalR hub is on the web port."
+          },
+          "hasToken": {
+            "type": "boolean",
+            "description": "Whether the provider token exists: one for every kind (#406), so the same for all. Without it nothing can connect."
+          },
+          "state": {
+            "description": "off, waiting, connected or disconnected.",
+            "$ref": "#/components/schemas/ExternalProviderState"
+          },
+          "providerId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The connected or last provider's id."
+          },
+          "providerName": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Its name."
+          },
+          "providerVersion": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Its version."
+          },
+          "since": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the current state began.",
+            "format": "date-time"
+          },
+          "lastDataAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the provider's data was last accepted.",
+            "format": "date-time"
+          },
+          "lastProblems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Why its last data was refused, or empty."
+          },
+          "healthy": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "What the provider last reported about itself, or null."
+          },
+          "statusMessage": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Its message with that report."
+          },
+          "unanswered": {
+            "type": "boolean",
+            "description": "True when it did not answer Gleanvolt's last request in time."
+          },
+          "needsOwner": {
+            "type": "boolean",
+            "description": "True when the provider said only the owner can fix it: an expired login, a consent screen.",
+            "default": false
+          },
+          "statusCode": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The code with that report (#415), e.g. `needs-sign-in`, `needs-code`, `unreachable`,\nor null. One of the provider contract's `ProviderStatusCodes`, or one Gleanvolt doesn't know."
+          },
+          "statusText": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "That report in English as Gleanvolt words it: its words for the code, then the provider's detail. Null\nwhen the provider said nothing."
+          },
+          "rememberedProviderId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "For the charger (#440): the plugin id Gleanvolt remembers and lets in alone until the owner presses Forget on\nSettings. Null for every other kind, and before the first plugin connected."
+          },
+          "lastRefusal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The last connection this kind refused since the start, or null; cleared when one is accepted.",
+                "$ref": "#/components/schemas/ExternalProviderRefusalResponse"
+              }
+            ]
+          }
+        },
+        "description": "One kind of external data provider (#386): a program outside Gleanvolt that connects to its web\nport and supplies data a built-in source otherwise would. Settings turns each kind on and makes its\ntoken; this only reports."
+      },
+      "ExternalProviderState": {
+        "enum": [
+          "off",
+          "waiting",
+          "connected",
+          "disconnected"
+        ],
+        "description": "Where a kind's session is.\n\n- `off`: The owner has not turned the kind on.\n\n- `waiting`: On, and no provider has connected since the start.\n\n- `connected`: A provider is attached.\n\n- `disconnected`: A provider was attached and has gone. Its last data is kept."
+      },
       "FastChargeBasis": {
         "enum": [
           "full",
@@ -1881,6 +2257,36 @@
         },
         "description": "One local calendar day of forecast, reduced to the figures a caller would otherwise have to sum\nforty-eight periods for — and to whether summing them would even be right.\n\nThe four figures are the same ones the dashboard's forecast table and the /forecast\npage show, read from the summary the source worked out when its forecast landed rather than\nrecomputed per request."
       },
+      "ForecastOriginResponse": {
+        "required": [
+          "source",
+          "name",
+          "issuedAt",
+          "receivedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "The forecast source: `solcast` or `external`, as `SolarForecast:Source` names them."
+          },
+          "name": {
+            "type": "string",
+            "description": "What to show for it: \"Solcast\", or the external provider's name."
+          },
+          "issuedAt": {
+            "type": "string",
+            "description": "When the forecast was made: Solcast's fetch, or the time the provider stamped on it.",
+            "format": "date-time"
+          },
+          "receivedAt": {
+            "type": "string",
+            "description": "When Gleanvolt received it.",
+            "format": "date-time"
+          }
+        },
+        "description": "Where the solar forecast came from."
+      },
       "ForecastPeriodResponse": {
         "required": [
           "periodStart",
@@ -2046,6 +2452,7 @@
           "forecastAvailable",
           "forecastRetrievedAt",
           "weatherConfigured",
+          "weatherSource",
           "vehicleAvailable",
           "vehicleAgeSeconds",
           "vehicleStale",
@@ -2132,6 +2539,10 @@
             "type": "boolean",
             "description": "Whether a weather provider is configured at all."
           },
+          "weatherSource": {
+            "description": "Where the weather comes from (#424): `notProvided`, `openWeather` or `external`. With\n`external`, WeatherConfigured is true whether or not the provider is connected.",
+            "$ref": "#/components/schemas/WeatherSource"
+          },
           "vehicleAvailable": {
             "type": "boolean",
             "description": "Whether any vehicle reading has arrived."
@@ -2206,7 +2617,7 @@
             "description": "Whether there is a tariff to wait for. False with no tariff selected (see GET /tariff), and then a flag\nthat is on is ignored: the mode charges whatever the hour."
           }
         },
-        "description": "<i>Low tariff only</i> as the controller is using it. Takes effect on the next poll, including for a\nmode already running; it does not persist across restarts."
+        "description": "<i>Low tariff only</i> as the controller is using it. Takes effect on the next poll, including for a\nmode already running, and is kept across restarts."
       },
       "LowTariffStatusResponse": {
         "required": [
@@ -2877,7 +3288,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "Its identity within the system — for a charger, the id its topics are named after."
+            "description": "Its identity within the system."
           },
           "name": {
             "type": "string",
@@ -2910,7 +3321,7 @@
             "format": "int32"
           }
         },
-        "description": "One Modbus device on the system: what it is, and where it is on the network."
+        "description": "The inverter: what it is, and where it is on the network."
       },
       "SiteResponse": {
         "required": [
@@ -2926,9 +3337,7 @@
           "lossFactor",
           "installDate",
           "inverter",
-          "chargers",
-          "inverterDriver",
-          "chargerDriver"
+          "inverterDriver"
         ],
         "type": "object",
         "properties": {
@@ -3026,20 +3435,9 @@
             "description": "The inverter every figure in `/status` is read from.",
             "$ref": "#/components/schemas/SiteDeviceResponse"
           },
-          "chargers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SiteDeviceResponse"
-            },
-            "description": "The EV chargers. Exactly one is supported today; it is a list because that will not always be true."
-          },
           "inverterDriver": {
             "type": "string",
             "description": "The driver that reads and controls the inverter (`Pv:Inverter:Driver`): `solax` or `huawei`."
-          },
-          "chargerDriver": {
-            "type": "string",
-            "description": "The driver that reads and controls the charger Gleanvolt drives (`Pv:Chargers:0:Driver`): `solax`,\nthe only one so far. Empty when no charger is configured."
           }
         },
         "description": "The installation this API speaks for (issue #111): which system, where it is, what the array does,\nand which boxes it is made of.\n\nThe first question a program should be able to ask — an MCP client above all — is what am I\nconnected to. Every other endpoint answers what it is doing, and a caller that cannot tell\ntwo installations apart cannot safely act on either.\n\nEvery measurement is nullable and null means unset, never zero: a defaulted site is a\nsite in the Atlantic facing north with no capacity, and a client that cannot tell \"not configured\"\nfrom \"zero\" will draw exactly that conclusion."
@@ -3498,6 +3896,63 @@
                 "$ref": "#/components/schemas/UntilFullStatusResponse"
               }
             ]
+          },
+          "forecast": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Where the solar forecast behind the forecast figures came from and when (issue #388): Solcast, or an\nexternal provider by name. Null while no forecast is held, and in the status a control action\nanswers with: read it from GET /status.",
+                "$ref": "#/components/schemas/ForecastOriginResponse"
+              }
+            ]
+          },
+          "vehicleSource": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The feed the car's readings come from (issue #408): its source (`external` for an external\nprovider) and its name. Null when no feed reads the car, and in the status a control action answers\nwith: read it from GET /status.",
+                "$ref": "#/components/schemas/VehicleSourceResponse"
+              }
+            ]
+          },
+          "settings": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "Minimum battery SOC, SOC resume margin and min solar surplus as the controller is using them now\n(issue #392) — the same object as GET /charging/settings, read when the status is served rather than\nat the last poll, so a change made elsewhere shows at once. Null in the status a control action\nanswers with: read it from GET /status.",
+                "$ref": "#/components/schemas/ChargingSettingsResponse"
+              }
+            ]
+          },
+          "chargerAvailable": {
+            "type": "boolean",
+            "description": "Whether Gleanvolt can control the charger (issue #441). False after it has been unavailable for longer than\n`ChargeControl:ChargerUnavailableAfter` (2 minutes): no charger plugin connected, a plugin refused or\nreporting an error, or a charger that can't be read. Meanwhile no mode can be started (409), a running one is\nsuspended, and the charger follows its own settings.",
+            "default": true
+          },
+          "chargerState": {
+            "description": "Which: `available`, `noPlugin`, `needsOwner` or `error`.",
+            "$ref": "#/components/schemas/ChargerAvailabilityState"
+          },
+          "chargerReason": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Why it is unavailable, in English; null while it is available."
+          },
+          "suspendedSince": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the running mode was suspended for the charger (issue #441); null while it isn't. The mode stays selected\nand resumes by itself when the charger is back.",
+            "format": "date-time"
           }
         },
         "description": "What the controller is doing right now: one poll's worth of the whole site, as the control loop\nlast read it.\n\nEvery power is instantaneous and in watts, signed the way the hardware reports it, and every\nenergy is in watt-hours. timestamp is when the poll behind these figures completed — check\nit before drawing conclusions from anything else here."
@@ -4128,6 +4583,21 @@
             ],
             "description": "The shared high-tariff price, or null when not entered.",
             "format": "double"
+          },
+          "origin": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The external provider the windows came from, by its name, for the `External` strategy; null\nfor a strategy that makes its own."
+          },
+          "receivedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the external provider's windows arrived, or null.",
+            "format": "date-time"
           }
         },
         "description": "What grid energy costs when (issue #265): the selected tariff strategy's timeline, the rate now and\nwhen it changes. Prices are per kWh in string TariffResponse.Currency, the one figure here that is not a\nbase unit: it is money, and the installation's currency is configuration, not a conversion.\n\nNo timeline is no restriction, never \"always low\": IReadOnlyList&lt;TariffWindowResponse&gt; TariffResponse.Windows is empty and\nTariffNowResponse? TariffResponse.Now null when the provider is None, and when the selected one cannot answer,\nwhich string? TariffResponse.Unavailable then says."
@@ -4463,6 +4933,37 @@
         },
         "description": "What the car last said about itself, and how long ago it said it.\n\nThe age is part of the reading. A cloud-reported state of charge arrives when the car\nfeels like it — routinely hours late — so a caller handed a bare percentage will treat a\nsix-hour-old number as current. Nothing about how the charger is driven depends on any of this: it\nshapes what can be asked for, never how it is delivered."
       },
+      "VehicleSourceResponse": {
+        "required": [
+          "source",
+          "name",
+          "health"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Which feed: `external` for an external provider, else the manufacturer feed's id\n(`vw-website`, `skoda`, `vw-group`). For display and monitoring; it may grow."
+          },
+          "name": {
+            "type": "string",
+            "description": "What to show for it: \"volkswagen.de\", \"MyŠkoda\", or the external provider's name."
+          },
+          "health": {
+            "description": "Whether it can currently produce a reading.",
+            "$ref": "#/components/schemas/VehicleSourceState"
+          }
+        },
+        "description": "The feed the car is read from."
+      },
+      "VehicleSourceState": {
+        "enum": [
+          "ok",
+          "degraded",
+          "needsOwner"
+        ],
+        "description": "Whether a manufacturer's feed can currently produce a reading — three states, because those are\nthe three different things an owner can do about it (issue #140).\n\nThe distinction that matters is VehicleSourceState.Degraded against\nVehicleSourceState.NeedsOwner. Both leave the reading ageing on the dashboard, and they call for\nopposite responses: one clears itself and wants nothing, the other will never clear until somebody\nopens a browser. A card that showed them alike would waste the only information the owner can act\non — and a charger sitting idle is already the most convincing impersonation of a fault this\ncontroller can produce.Deliberately not a taxonomy of failures. The service knows a dozen ways an exchange can go\nwrong (VwGroupFailure alone has nine members); what leaves the service is which of these\nthree the owner is in, plus a sentence. Anything finer is a second service's argument to make.\n\n- `ok`: The last fetch produced a reading. Nothing to say and nothing to do.\n\n- `degraded`: The feed is trying and not currently succeeding: a 5xx, a timeout, a session that expired, a data request that has not been filled yet — or simply nothing fetched so far. Self-clearing, so it is reported without alarm and the reading is left to age.\n\n- `needsOwner`: Nothing this process can do will fix it: a refused password, a consent screen, an OTP, a CAPTCHA, or a portal setting only the owner can make. The service stops asking here rather than replaying a password at a real identity provider on a clock, which is how accounts get locked."
+      },
       "WeatherResponse": {
         "required": [
           "observedAt",
@@ -4484,37 +4985,41 @@
           "temperatureCelsius": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
+              "null",
               "number",
               "string"
             ],
-            "description": "Air temperature.",
+            "description": "Air temperature, or null when the provider didn't report it.",
             "format": "double"
           },
           "pressurePascals": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
+              "null",
               "number",
               "string"
             ],
-            "description": "Barometric pressure at station level, in Pa.",
+            "description": "Barometric pressure at station level, in Pa, or null when not reported.",
             "format": "double"
           },
           "humidityPercent": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
+              "null",
               "number",
               "string"
             ],
-            "description": "Relative humidity.",
+            "description": "Relative humidity, or null when not reported.",
             "format": "double"
           },
           "cloudsPercent": {
             "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
             "type": [
+              "null",
               "number",
               "string"
             ],
-            "description": "Cloud cover — the figure that matters to the roof.",
+            "description": "Cloud cover — the figure that matters to the roof — or null when not reported. OpenWeatherMap reports\nall four; an external weather provider (#424) may not.",
             "format": "double"
           },
           "visibilityMetres": {
@@ -4537,6 +5042,13 @@
           }
         },
         "description": "Conditions at the site, from the configured weather provider."
+      },
+      "WeatherSource": {
+        "enum": [
+          "notProvided",
+          "external"
+        ],
+        "description": "Where the weather a charging session is recorded with comes from (#424): `Weather:Source`,\nchosen on Settings and applied without a restart.\n\nThe built-in OpenWeatherMap integration was the third choice until #425. OpenWeatherMap now comes\nthrough the OpenWeather plugin, an external provider; an installation that used the built-in is moved\nto WeatherSource.External on its first start.\n\n- `notProvided`: No weather: sessions are recorded without it. A finished choice, not a missing setting.\n\n- `external`: An external provider, publishing on the weather hub (/providers/weather), such as the OpenWeather plugin."
       }
     },
     "securitySchemes": {
