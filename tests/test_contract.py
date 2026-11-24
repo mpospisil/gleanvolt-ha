@@ -1,4 +1,4 @@
-"""The drift guard: every route, field read and field sent exists in contract/openapi.json (v1.2.0)."""
+"""The drift guard: every route, field read and field sent exists in contract/openapi.json (Gleanvolt 1.4)."""
 
 from __future__ import annotations
 
